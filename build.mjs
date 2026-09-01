@@ -74,11 +74,20 @@ if (pages.size === 0) {
   throw new Error('No pages fetched — aborting build.');
 }
 
+// Injected into every page. GoHighLevel's runtime JS rewrites anchor hrefs back
+// to absolute school-of-gains.com URLs, so we intercept clicks in the capture
+// phase and keep same-apex navigation on this mirror. Subdomains and external
+// links pass through untouched.
+const INJECT = `\n<script>(function(){document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a'):null;if(!a)return;var href=a.getAttribute('href')||a.href;if(!href)return;try{var u=new URL(href,location.href);if(u.hostname==='school-of-gains.com'||u.hostname==='www.school-of-gains.com'){e.preventDefault();location.href=u.pathname+u.search+u.hash;}}catch(_){}}, true);})();</script>\n`;
+
 function rewrite(html) {
-  return html
+  const out = html
     .replaceAll('https://www.school-of-gains.com', '')
     .replaceAll('https://school-of-gains.com', '')
     .replaceAll('href=""', 'href="/"');
+  return out.includes('</body>')
+    ? out.replace('</body>', INJECT + '</body>')
+    : out + INJECT;
 }
 
 await mkdir('public', { recursive: true });
