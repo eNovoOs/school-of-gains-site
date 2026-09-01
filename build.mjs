@@ -12,6 +12,7 @@ const UA =
 
 // Known entry points from the nav + footer; the crawler discovers the rest.
 const SEEDS = [
+  // Home-page nav/footer slug family
   '/home-page',
   '/apprentice',
   '/master',
@@ -20,7 +21,20 @@ const SEEDS = [
   '/newsletter',
   '/special-offer-general',
   '/privacy-page',
-  '/terms-page'
+  '/terms-page',
+  // Pages not linked from the home nav (found via GHL Sites list)
+  '/contact',
+  '/nfp-indicator',
+  // Alternate slug family used by the Contact page nav/footer
+  '/home',
+  '/apprentice-of-gains',
+  '/discord',
+  '/about-us',
+  '/privacy-policy',
+  '/terms',
+  // Discord + 7 Free Lessons opt-in funnel (not linked from site nav)
+  '/discord-free-lessons',
+  '/discord-free-lessons-thank-you'
 ];
 
 const ASSET_RE = /\.(png|jpe?g|svg|webp|gif|css|mjs|js|ico|mp4|webm|woff2?|ttf|pdf|json|xml|txt)$/i;
