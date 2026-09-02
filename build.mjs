@@ -1,5 +1,12 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, copyFile } from 'node:fs/promises';
 import path from 'node:path';
+
+// Old School of Gains logo assets to swap for the new PaperGains logo.
+const OLD_LOGOS = [
+  'https://assets.cdn.filesafe.space/3mi3YQaZvtUMZzaQUuL6/media/69c3581dab2203884982a7c7.svg',
+  'https://assets.cdn.filesafe.space/3mi3YQaZvtUMZzaQUuL6/media/69655d38f8a93b75c306981f.png'
+];
+const NEW_LOGO = '/logo.png';
 
 // Mirror the entire School of Gains site (all internal pages on the apex domain)
 // into static HTML at build time. Internal links are rewritten to stay on the
@@ -92,19 +99,24 @@ if (pages.size === 0) {
 // to absolute school-of-gains.com URLs, so we intercept clicks in the capture
 // phase and keep same-apex navigation on this mirror. Subdomains and external
 // links pass through untouched.
-const INJECT = `\n<script>(function(){document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a'):null;if(!a)return;var href=a.getAttribute('href')||a.href;if(!href)return;try{var u=new URL(href,location.href);if(u.hostname==='school-of-gains.com'||u.hostname==='www.school-of-gains.com'){e.preventDefault();location.href=u.pathname+u.search+u.hash;}}catch(_){}}, true);})();</script>\n`;
+const INJECT = `\n<script>(function(){var LOGO='/logo.png';var IDS=['69c3581dab2203884982a7c7','69655d38f8a93b75c306981f'];function fixLogos(){var im=document.getElementsByTagName('img');for(var i=0;i<im.length;i++){var s=im[i].getAttribute('src')||'';for(var j=0;j<IDS.length;j++){if(s.indexOf(IDS[j])>-1){im[i].src=LOGO;break;}}}}fixLogos();document.addEventListener('DOMContentLoaded',fixLogos);var n=0,iv=setInterval(function(){fixLogos();if(++n>12)clearInterval(iv);},400);document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a'):null;if(!a)return;var href=a.getAttribute('href')||a.href;if(!href)return;try{var u=new URL(href,location.href);if(u.hostname==='school-of-gains.com'||u.hostname==='www.school-of-gains.com'){e.preventDefault();location.href=u.pathname+u.search+u.hash;}}catch(_){}}, true);})();</script>\n`;
 
 function rewrite(html) {
-  const out = html
+  let out = html
     .replaceAll('https://www.school-of-gains.com', '')
     .replaceAll('https://school-of-gains.com', '')
     .replaceAll('href=""', 'href="/"');
+  for (const old of OLD_LOGOS) out = out.replaceAll(old, NEW_LOGO);
   return out.includes('</body>')
     ? out.replace('</body>', INJECT + '</body>')
     : out + INJECT;
 }
 
 await mkdir('public', { recursive: true });
+
+// Ship the new logo and expose it at /logo.png.
+await copyFile('assets/logo.png', 'public/logo.png');
+console.log('copied logo -> public/logo.png');
 
 for (const [p, raw] of pages) {
   const rel = p.replace(/^\//, '');
