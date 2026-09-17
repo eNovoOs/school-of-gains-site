@@ -1,4 +1,4 @@
-import { mkdir, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, writeFile, copyFile, cp } from 'node:fs/promises';
 import path from 'node:path';
 
 // Old School of Gains logo assets to swap for the new PaperGains logo.
@@ -125,6 +125,11 @@ for (const [p, raw] of pages) {
   await writeFile(file, rewrite(raw));
   console.log('wrote', file);
 }
+
+// Native onboarding flow (/join → /join/discord → /join/connect → thank-you).
+// Static pages authored in src/join, served next to the mirrored GHL pages.
+await cp('src/join', 'public/join', { recursive: true });
+console.log('copied src/join -> public/join');
 
 // Serve the home page at the site root too.
 const home = pages.get('/home-page');

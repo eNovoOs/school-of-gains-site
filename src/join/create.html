@@ -1,0 +1,33 @@
+<!doctype html><html lang="en"><head><title>Create a Discord Account — School of Gains</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/join/join.css">
+<script src="/join/join.js"></script></head><body>
+<nav class="nav">
+  <a class="brand" href="/"><img src="/logo.png" alt=""><span>School<br>of Gains</span></a>
+  <span class="powered"><a href="/join/discord" data-keep-email style="color:#b0b0b0;text-decoration:none">Back</a></span>
+</nav>
+<main class="wrap"><div class="card">
+  <div class="icon" style="color:var(--discord)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.2.4a18 18 0 0 1 4.6 2.3 15.6 15.6 0 0 0-15.6 0 18 18 0 0 1 4.6-2.3L8.6 3a19.8 19.8 0 0 0-4.9 1.4C.6 9 0 13.4.3 17.8a20 20 0 0 0 6 3l1.3-2.1a13 13 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 11.8 0l.5.4a13 13 0 0 1-2 1l1.3 2.1a20 20 0 0 0 6-3c.4-5-.7-9.4-3.4-13.4ZM8.7 15.2c-1.2 0-2.1-1.1-2.1-2.4s1-2.4 2.1-2.4c1.2 0 2.2 1.1 2.1 2.4 0 1.3-.9 2.4-2.1 2.4Zm6.6 0c-1.2 0-2.1-1.1-2.1-2.4s1-2.4 2.1-2.4c1.2 0 2.2 1.1 2.1 2.4 0 1.3-.9 2.4-2.1 2.4Z"/></svg></div>
+  <h1>Let's Get You a Discord Account</h1>
+  <p class="sub">Our community on Whop uses Discord. It's free and takes less than 2 minutes to create an account.</p>
+  <div class="steps">
+    <div><span>1</span>Click the button below to go to Discord</div>
+    <div><span>2</span>Create your free account</div>
+    <div><span>3</span>Come back here to connect your Discord</div>
+  </div>
+  <a class="btn btn-discord" href="https://discord.com/register" target="_blank" rel="noopener" id="goDiscord">Go to Discord <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+  <a class="btn btn-outline" href="/join/ready" data-keep-email id="done" style="display:none">I created my account <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+  <a class="back" href="/join/connect" data-keep-email>← I already have a Discord account</a>
+</div></main>
+<div class="foot">Learn. Trade. Grow. Belong.</div>
+<script>
+SOGJoin.requireEmail();
+// Once they open Discord in a new tab, reveal the "come back" button.
+document.getElementById('goDiscord').addEventListener('click',function(){document.getElementById('done').style.display='flex';});
+</script>
+</body></html>

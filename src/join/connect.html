@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><head><title>Connect Your Discord — School of Gains</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/join/join.css">
+<script src="/join/join.js"></script>
+<script async defer src="https://js.whop.com/static/checkout/loader.js"></script>
+</head><body>
+<nav class="nav">
+  <a class="brand" href="/"><img src="/logo.png" alt=""><span>School<br>of Gains</span></a>
+  <span class="powered">Powered by <b>Whop</b></span>
+</nav>
+<main class="wrap"><div class="card">
+  <div class="icon-row"><span style="color:var(--discord)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.2.4a18 18 0 0 1 4.6 2.3 15.6 15.6 0 0 0-15.6 0 18 18 0 0 1 4.6-2.3L8.6 3a19.8 19.8 0 0 0-4.9 1.4C.6 9 0 13.4.3 17.8a20 20 0 0 0 6 3l1.3-2.1a13 13 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 11.8 0l.5.4a13 13 0 0 1-2 1l1.3 2.1a20 20 0 0 0 6-3c.4-5-.7-9.4-3.4-13.4ZM8.7 15.2c-1.2 0-2.1-1.1-2.1-2.4s1-2.4 2.1-2.4c1.2 0 2.2 1.1 2.1 2.4 0 1.3-.9 2.4-2.1 2.4Zm6.6 0c-1.2 0-2.1-1.1-2.1-2.4s1-2.4 2.1-2.4c1.2 0 2.2 1.1 2.1 2.4 0 1.3-.9 2.4-2.1 2.4Z"/></svg></span><span>⇄</span><span style="color:var(--green)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="16 9 10.5 15 8 12.5"/></svg></span></div>
+  <h1>Connect Your Discord</h1>
+  <p class="sub">Click <b>Join</b> below to activate your free membership on Whop with <b data-email></b>. Whop will then connect your Discord account and add you to the School of Gains server.</p>
+  <div id="whop-checkout"
+       data-whop-checkout-plan-id="plan_PWxXNWaKYvnXc"
+       data-whop-checkout-theme="dark"
+       data-whop-checkout-theme-accent-color="green"
+       data-whop-checkout-theme-background-color="#111111"
+       data-whop-checkout-theme-border-radius="10"
+       data-whop-checkout-hide-price="true"></div>
+  <div class="checks">
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="16 9 10.5 15 8 12.5"/></svg> Instant access to our community</div>
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="16 9 10.5 15 8 12.5"/></svg> Unlock all channels and resources</div>
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="16 9 10.5 15 8 12.5"/></svg> Use the same email you just entered</div>
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="16 9 10.5 15 8 12.5"/></svg> No additional sign up needed</div>
+  </div>
+  <div class="secure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Secure connection powered by Whop</div>
+  <a class="back" href="/join/discord" data-keep-email>← Back</a>
+</div></main>
+<div class="foot">Learn. Trade. Grow. Belong.</div>
+<script>
+(function(){
+  var email=SOGJoin.requireEmail();
+  var el=document.getElementById('whop-checkout');
+  // Prefill the email captured in step 1 and send the user back to the SOG thank-you page when Whop is done.
+  el.setAttribute('data-whop-checkout-prefill-email',email);
+  el.setAttribute('data-whop-checkout-return-url',location.origin+'/discord-free-lessons-thank-you?status=success&via=join');
+})();
+</script>
+</body></html>
