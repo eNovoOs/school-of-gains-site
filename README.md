@@ -32,6 +32,15 @@ The email travels between steps via `?email=` + `sessionStorage`; steps 2–4 re
 
 - `BEEHIIV_API_KEY` — Beehiiv API key.
 - `BEEHIIV_PUBLICATION_ID` — the `pub_…` id of the School of Gains publication.
+- `GHL_WEBHOOK_URL` — GoHighLevel Inbound Webhook URL (Automations → Workflow → trigger
+  "Inbound Webhook"). Receives two events per lead as JSON:
+  - `stage: "email_captured"` from `/api/subscribe` (step 1)
+  - `stage: "whop_joined"` from `/api/joined`, fired by the thank-you page when Whop returns
+    the user with `?via=join&status=success` (step 5)
 
-Without them `/api/subscribe` answers `{ ok: false, error: "not_configured" }` and the flow
-still continues (the email is only captured by Whop at step 3).
+  Payload: `email, stage, source, funnel, tags[], timestamp, ip, user_agent, referer` plus
+  `form_source` / `whop_status`. Map `email` to the contact and `stage`/`tags` to tags in the
+  workflow.
+
+Every destination is optional and independent: a missing variable logs a warning and answers
+`not_configured`, and the user-facing flow always continues.

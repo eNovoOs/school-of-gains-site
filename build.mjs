@@ -101,15 +101,20 @@ if (pages.size === 0) {
 // links pass through untouched.
 const INJECT = `\n<script>(function(){var LOGO='/logo.png';var IDS=['69c3581dab2203884982a7c7','69655d38f8a93b75c306981f'];function fixLogos(){var im=document.getElementsByTagName('img');for(var i=0;i<im.length;i++){var s=im[i].getAttribute('src')||'';for(var j=0;j<IDS.length;j++){if(s.indexOf(IDS[j])>-1){im[i].src=LOGO;break;}}}}fixLogos();document.addEventListener('DOMContentLoaded',fixLogos);var n=0,iv=setInterval(function(){fixLogos();if(++n>12)clearInterval(iv);},400);document.addEventListener('click',function(e){var a=e.target&&e.target.closest?e.target.closest('a'):null;if(!a)return;var href=a.getAttribute('href')||a.href;if(!href)return;try{var u=new URL(href,location.href);if(u.hostname==='school-of-gains.com'||u.hostname==='www.school-of-gains.com'){e.preventDefault();location.href=u.pathname+u.search+u.hash;}}catch(_){}}, true);})();</script>\n`;
 
-function rewrite(html) {
+// Injected only into the thank-you page. When Whop returns the user here after
+// "Join" (?via=join&status=success), report the completed sign-up to GHL.
+const JOINED_BEACON = `\n<script>(function(){try{var q=new URLSearchParams(location.search);if(q.get('via')!=='join')return;var e=sessionStorage.getItem('sog_join_email');if(!e)return;fetch('/api/joined',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:e,status:q.get('status')||''}),keepalive:true});sessionStorage.removeItem('sog_join_email');}catch(_){}})();</script>\n`;
+
+function rewrite(html, pagePath) {
   let out = html
     .replaceAll('https://www.school-of-gains.com', '')
     .replaceAll('https://school-of-gains.com', '')
     .replaceAll('href=""', 'href="/"');
   for (const old of OLD_LOGOS) out = out.replaceAll(old, NEW_LOGO);
+  const inject = INJECT + (pagePath === '/discord-free-lessons-thank-you' ? JOINED_BEACON : '');
   return out.includes('</body>')
-    ? out.replace('</body>', INJECT + '</body>')
-    : out + INJECT;
+    ? out.replace('</body>', inject + '</body>')
+    : out + inject;
 }
 
 await mkdir('public', { recursive: true });
@@ -122,7 +127,7 @@ for (const [p, raw] of pages) {
   const rel = p.replace(/^\//, '');
   const file = path.join('public', rel + '.html');
   await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, rewrite(raw));
+  await writeFile(file, rewrite(raw, p));
   console.log('wrote', file);
 }
 
@@ -133,6 +138,6 @@ console.log('copied src/join -> public/join');
 
 // Serve the home page at the site root too.
 const home = pages.get('/home-page');
-if (home) await writeFile('public/index.html', rewrite(home));
+if (home) await writeFile('public/index.html', rewrite(home, '/home-page'));
 
 console.log('Mirrored pages:', pages.size);
