@@ -5,7 +5,7 @@
 //   • GoHighLevel — inbound webhook, stage "email_captured"
 //       GHL_WEBHOOK_URL
 // Each destination is independent; one failing never blocks the other.
-const { sendToGHL, leadPayload } = require('../lib/ghl');
+const { sendToGHL, leadPayload, cleanAttribution } = require('../lib/ghl');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -17,14 +17,15 @@ module.exports = async (req, res) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ ok: false, error: 'invalid_email' });
 
   const source = String((body && body.source) || 'join');
+  const attr = cleanAttribution(body && body.attribution);
   const [beehiiv, ghl] = await Promise.all([
-    subscribeBeehiiv(email, source),
-    sendToGHL(leadPayload(req, email, 'email_captured', { form_source: source }))
+    subscribeBeehiiv(email, source, attr),
+    sendToGHL(leadPayload(req, email, 'email_captured', { form_source: source }, attr))
   ]);
   return res.status(200).json({ ok: beehiiv.ok || ghl.ok, beehiiv, ghl });
 };
 
-async function subscribeBeehiiv(email, source) {
+async function subscribeBeehiiv(email, source, attr) {
   const key = process.env.BEEHIIV_API_KEY;
   const pub = process.env.BEEHIIV_PUBLICATION_ID;
   if (!key || !pub) {
@@ -39,9 +40,11 @@ async function subscribeBeehiiv(email, source) {
         email,
         reactivate_existing: true,
         send_welcome_email: true,
-        utm_source: 'school-of-gains.com',
-        utm_medium: 'join-flow',
-        utm_campaign: source
+        // Real campaign UTMs when the visitor arrived with them; otherwise tag the flow itself.
+        utm_source: attr.utm_source || 'school-of-gains.com',
+        utm_medium: attr.utm_medium || 'join-flow',
+        utm_campaign: attr.utm_campaign || source,
+        referring_site: attr.landing_page || undefined
       })
     });
     const data = await r.json().catch(() => ({}));

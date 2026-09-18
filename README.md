@@ -39,8 +39,18 @@ The email travels between steps via `?email=` + `sessionStorage`; steps 2–4 re
     the user with `?via=join&status=success` (step 5)
 
   Payload: `email, stage, source, funnel, tags[], timestamp, ip, user_agent, referer` plus
-  `form_source` / `whop_status`. Map `email` to the contact and `stage`/`tags` to tags in the
-  workflow.
+  `form_source` / `whop_status`, and the first-touch attribution when present:
+  `utm_source, utm_medium, utm_campaign, utm_term, utm_content, fbclid, gclid, ttclid,
+  landing_page, referrer, captured_at`. Map `email` to the contact, `stage`/`tags` to tags and
+  the `utm_*` keys to custom fields in the workflow.
+
+### UTM / attribution capture
+
+`src/join/attribution.js` is injected into every page (mirrored GHL pages and `/join`). On the
+first visit that carries `utm_*` / `fbclid` / `gclid` / `ttclid` it stores them in
+`localStorage` (`sog_attribution`, 30 days, first touch wins) together with the landing page and
+referrer. The `/join` flow sends that object with both events, and `/api/subscribe` forwards
+the UTMs to Beehiiv as well (`utm_source/medium/campaign` + `referring_site`).
 
 Every destination is optional and independent: a missing variable logs a warning and answers
 `not_configured`, and the user-facing flow always continues.

@@ -13,6 +13,6 @@ module.exports = async (req, res) => {
   const email = String((body && body.email) || '').trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ ok: false, error: 'invalid_email' });
 
-  const ghl = await sendToGHL(leadPayload(req, email, 'whop_joined', { whop_status: String((body && body.status) || '') }));
+  const ghl = await sendToGHL(leadPayload(req, email, 'whop_joined', { whop_status: String((body && body.status) || '') }, body && body.attribution));
   return res.status(200).json(ghl);
 };
