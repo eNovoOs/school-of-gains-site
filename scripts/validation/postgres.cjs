@@ -109,6 +109,8 @@ async function run(argv=process.argv.slice(2),env=process.env) {
     check('provider signal inbox processes duplicate readbacks once without HTTP');
     await db.rateLimit('integration-limit',1);await assert.rejects(db.rateLimit('integration-limit',1),{message:'rate_limited'});
     check('durable rate limiting increments atomically');
+    await require('./dashboard-fixtures.cjs')(db,contact.id,newCycle.id,input.journeyId);
+    check('dashboard campaign dimensions and current outcomes share a deduplicated first-booked cohort');
     process.stdout.write(JSON.stringify({ok:true,checks:checks.length,providerWrites:0,scope:'random disposable schema'})+'\n');
   } finally {
     if(migrationConnection){await migrationConnection.query('ROLLBACK').catch(()=>{});migrationConnection.release();}
