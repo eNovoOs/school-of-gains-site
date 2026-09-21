@@ -85,3 +85,56 @@ test('legacy join reads first-touch flat aliases without reviving old storage', 
   vm.runInNewContext(shim, { window });
   assert.equal(window.SOGAttribution, b.api);
 });
+
+test('registered public evidence survives capture, consented navigation and server validation without source inference', () => {
+  const storage = new Map([['sog_analytics_consent', 'granted']]);
+  const first = browser({ storage, url: 'https://school-of-gains.com/links?utm_source=instagram&utm_medium=organic_social&link_id=sog_link_006&legacy_route=legacy_001&route_map_version=v1' });
+  const next = browser({ storage, referrer: 'https://school-of-gains.com/links' });
+  const { event, touch } = require('../lib/attribution');
+  const input = event(first.requests[0]);
+  for (const captured of [next.api.get().firstTouch, input.attribution.firstTouch]) {
+    assert.equal(captured.link_id, 'sog_link_006');
+    assert.equal(captured.legacy_route, 'legacy_001');
+    assert.equal(captured.route_map_version, 'v1');
+    assert.equal(captured.utm_source, 'instagram');
+  }
+  assert.equal(input.attribution.firstTouch.confidence, 'explicit');
+  const markerOnly = touch({ legacy_route: 'legacy_011', route_map_version: 'v1' });
+  assert.equal(markerOnly.source, 'direct');
+  assert.equal(markerOnly.utm_source, undefined);
+  assert.equal(markerOnly.confidence, 'unknown');
+});
+
+test('client and server share exact evidence allowlists; unknown/affiliate and malformed markers are discarded', () => {
+  const { touch } = require('../lib/attribution');
+  for (const [key, values] of Object.entries({
+    link_id: ['sog_link_001', 'sog_link_014', 'sog_link_015', 'sog_link_999', 'person@example.com', ['sog_link_001']],
+    legacy_route: ['legacy_001', 'legacy_046', 'legacy_047', '/linktree-mads', ['legacy_001']]
+  })) {
+    for (const value of values) {
+      const query = new URLSearchParams({ [key]: value, route_map_version: 'v1' });
+      const client = browser({ url: 'https://school-of-gains.com/links?' + query }).api.get().firstTouch;
+      const server = touch({ [key]: String(value), route_map_version: 'v1' });
+      assert.equal(client[key], server[key]);
+    }
+  }
+  assert.equal(touch({link_id:['sog_link_001']}).link_id, undefined);
+  for (const value of [{legacy_route:'legacy_001'}, {route_map_version:'v1'}, {legacy_route:'legacy_001',route_map_version:'v2'}]) {
+    const client = browser({ url: 'https://school-of-gains.com/links?' + new URLSearchParams(value) }).api.get().firstTouch;
+    const server = touch(value);
+    assert.equal(client.legacy_route, undefined);
+    assert.equal(server.legacy_route, undefined);
+    assert.equal(client.route_map_version, undefined);
+    assert.equal(server.route_map_version, undefined);
+  }
+});
+
+test('duplicate or internal evidence cannot replace source or propagate arbitrary URL values', () => {
+  const duplicated = browser({url:'https://school-of-gains.com/links?utm_source=google&link_id=sog_link_001&link_id=sog_link_002&legacy_route=legacy_001&route_map_version=v1&route_map_version=v2'}).api.get().firstTouch;
+  assert.equal(duplicated.utm_source,'google');
+  assert.equal(duplicated.link_id,undefined);
+  assert.equal(duplicated.legacy_route,undefined);
+  const internal = browser({url:'https://school-of-gains.com/apply?link_id=sog_link_001&legacy_route=legacy_011&route_map_version=v1',referrer:'https://school-of-gains.com/links'}).api.get().firstTouch;
+  assert.equal(internal.link_id,undefined);
+  assert.equal(internal.legacy_route,undefined);
+});

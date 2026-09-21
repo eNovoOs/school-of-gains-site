@@ -14,7 +14,7 @@
       for(const channel of data.channels) { const tr=node('tr','');for(const value of [channel.source,channel.medium,fmt(channel.applications),fmt(channel.bookings)]) tr.append(node('td',value));$('channels').append(tr); }
       if(!data.channels.length) { const tr=node('tr','');const td=node('td','No applications or confirmed bookings recorded in this window.');td.colSpan=4;tr.append(td);$('channels').append(tr); }
       row($('pipeline'),'Open sales cycles',fmt(data.health.openCycles));
-      row($('pipeline'),'Awaiting first booking',fmt(data.health.unbookedCycles));
+      row($('pipeline'),'Currently unbooked',fmt(data.health.unbookedCycles));
       row($('health'),'Pending CRM deliveries',fmt(data.health.pendingDeliveries));
       row($('health'),'Failed CRM deliveries',fmt(data.health.failedDeliveries));
       row($('health'),'Pending provider signals',fmt(data.health.pendingSignals));

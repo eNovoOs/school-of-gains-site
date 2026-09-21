@@ -82,6 +82,23 @@ function showConfirmed(startTime) {
 function restoreExisting(existing) {
   if (!existing || !Number.isFinite(Date.parse(existing.startTime))) return false;
   if (existing.state === 'confirmed') { showConfirmed(existing.startTime); return true; }
+  if (['cancelled', 'invalid'].includes(existing.state)) {
+    // Cancellation releases the server intent lock; a new choice needs a new ID.
+    bookingAttempt = null;
+    selectedSlot = null;
+    awaitingVerification = false;
+    heading.textContent = 'Your previous appointment is no longer booked.';
+    status.textContent = 'You can choose another available time below when scheduling is available.';
+    return false;
+  }
+  if (['showed', 'noshow'].includes(existing.state)) {
+    heading.textContent = existing.state === 'showed' ? 'Your appointment has taken place.' : existing.state === 'noshow' ? 'Your appointment was marked as missed.' : 'Your appointment is no longer booked.';
+    status.textContent = fullTime(existing.startTime);
+    detailHeading.textContent = 'Contact the School of Gains sales team.';
+    detail.textContent = 'Our team can help with the next step or arrange another conversation.';
+    picker.hidden = true;
+    return true;
+  }
   if (!['pending', 'uncertain'].includes(existing.state)) return false;
   detailHeading.textContent = 'An appointment request is being checked.';
   detail.textContent = 'Please do not make a second booking while this request is being verified.';
@@ -138,8 +155,8 @@ async function check() {
         await loadSlots();
       } else {
         picker.hidden = true;
-        detailHeading.textContent = 'Scheduling is not available yet.';
-        detail.textContent = 'Online scheduling is still being set up. No appointment has been booked. You can check again here when scheduling becomes available.';
+        detailHeading.textContent = result.reason === 'sales_review_required' ? 'Please contact our sales team.' : 'Scheduling is not available yet.';
+        detail.textContent = result.reason === 'sales_review_required' ? 'Our team needs to review your sales conversation before another appointment can be booked.' : 'Online scheduling is still being set up. No appointment has been booked. You can check again here when scheduling becomes available.';
       }
     }
   } catch (_) {

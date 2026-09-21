@@ -6,6 +6,16 @@
   var TTL = 30 * 86400000;
   var SESSION_TTL = 30 * 60000;
   var PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_id', 'gclid', 'fbclid', 'gbraid', 'wbraid', 'ttclid'];
+  // Public registry codes only. Link 015 is an unverified affiliate proposal and is excluded.
+  function evidence(input) {
+    var result = {};
+    if (typeof input.link_id === 'string' && /^sog_link_(00[1-9]|01[0-4])$/.test(input.link_id)) result.link_id = input.link_id;
+    if (input.route_map_version === 'v1' && typeof input.legacy_route === 'string' && /^legacy_(00[1-9]|0[1-3][0-9]|04[0-6])$/.test(input.legacy_route)) {
+      result.legacy_route = input.legacy_route;
+      result.route_map_version = 'v1';
+    }
+    return result;
+  }
   var now = Date.now();
   var uuid = function () { return window.crypto.randomUUID(); };
   var clone = function (value) { return JSON.parse(JSON.stringify(value)); };
@@ -43,7 +53,7 @@
     if (!/^https?:$/.test(landing.protocol) || !ownHost(landing.hostname)) return null;
     var result = { captured_at: new Date(date).toISOString(), landing_page: landing.origin + safePath(landing.pathname), referrer: safeReferrer(input.referrer) };
     PARAMS.forEach(function (key) { var value = param(input[key]); if (value) result[key] = value; });
-    return result;
+    return Object.assign(result, evidence(input));
   }
   function nonDirect(touch) {
     return !!(touch.utm_source || touch.gclid || touch.gbraid || touch.wbraid || touch.fbclid || touch.ttclid || touch.referrer);
@@ -53,7 +63,10 @@
   try { internal = ownHost(new URL(window.document.referrer).hostname); } catch (_) {}
   if (!internal) {
     var query = new URLSearchParams(window.location.search);
-    PARAMS.forEach(function (key) { var value = param(query.get(key)); if (value) current[key] = value; });
+    PARAMS.forEach(function (key) { var value = query.getAll(key).length === 1 ? param(query.get(key)) : ''; if (value) current[key] = value; });
+    var suppliedEvidence = {};
+    ['link_id', 'legacy_route', 'route_map_version'].forEach(function (key) { if (query.getAll(key).length === 1) suppliedEvidence[key] = query.get(key); });
+    Object.assign(current, evidence(suppliedEvidence));
   }
   var state = { journeyId: uuid(), sessionId: uuid(), firstTouch: current, latestTouch: current, lastSeenAt: now };
   function hydrate() {

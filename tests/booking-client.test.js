@@ -82,3 +82,19 @@ test('existing appointment conflict blocks new slot choices', async () => {
   assert.equal(r.elements['#booking-timezone'].disabled, true);
   assert.match(r.elements['#booking-error'].textContent, /sales team/);
 });
+
+test('cancelled and invalid appointments allow a fresh booking without restoring cancelled identity or claiming confirmation', async () => {
+ for (const state of ['cancelled', 'invalid']) {
+  const oldId = require('node:crypto').randomUUID();
+  const r = await interactive({ existing: { bookingId: oldId, startTime: new Date(Date.now()+86400000).toISOString(), timezone: 'UTC', state, canRetry: false }, posts: [{ ok: true, status: 202, body: { ok: true, pending: true } }] });
+  assert.equal(r.elements['#booking-picker'].hidden, false);
+  assert.match(r.elements['#booking-heading'].textContent, /no longer booked/);
+  assert.ok(r.calls.some(c => c.url.startsWith('/api/booking-slots')));
+  assert.equal(r.calls.some(c => c.url === '/api/bookings'), false);
+  await r.choose(); await r.confirm();
+  const request = JSON.parse(r.calls.find(c => c.url === '/api/bookings').config.body);
+  assert.notEqual(request.bookingId, oldId);
+  assert.equal(request.startTime, r.slotTime);
+  assert.notEqual(r.elements['#booking-heading'].textContent, 'Your call is booked.');
+ }
+});
