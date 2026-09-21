@@ -19,11 +19,11 @@ that replaces the "email → check your inbox" hand-off with an in-page Whop con
 
 | Step | URL | What happens |
 |---|---|---|
-| 1 | `/join` | Email capture. Posts to `/api/subscribe` (Beehiiv), then continues. |
+| 1 | `/join` | Email capture (sells the free community; AOG 7 is a separate MOF offer). Posts to `/api/subscribe`, then continues. |
 | 2 | `/join/discord` | "Do you already have a Discord account?" — Yes / No. |
 | 3 | `/join/connect` | Whop embedded checkout for the free plan (`plan_PWxXNWaKYvnXc`), email prefilled. |
-| 4A | `/join/create` | Guide to create a Discord account → `discord.com/register`. |
-| 4B | `/join/ready` | Return page after creating the account → back to step 3. |
+| 4A | `/join/create` | First-time Discord instructions (no server needed), opens `discord.com/register` in a new tab; "My Discord Account Is Ready — Continue" → step 3. |
+| 4B | `/join/ready` | Legacy URL, redirects to step 3. |
 | 5 | `/discord-free-lessons-thank-you?status=success&via=join` | Whop's `return-url`. Existing SOG thank-you page. |
 
 The email travels between steps via `?email=` + `sessionStorage`; steps 2–4 redirect to `/join` if it is missing.
