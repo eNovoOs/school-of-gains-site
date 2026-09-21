@@ -1,0 +1,15 @@
+{
+  "appointment": {
+    "id": "appointment1",
+    "locationId": "3mi3YQaZvtUMZzaQUuL6",
+    "contactId": "contact1",
+    "calendarId": "kQHIe9WY8PjSAl11jSjc",
+    "appointmentStatus": "confirmed",
+    "appoinmentStatus": "confirmed",
+    "dateUpdated": "2026-03-17T17:24:56.000Z",
+    "startTime": "2026-03-17T13:00:00-07:00",
+    "description": "Sanitized contract fixture",
+    "notes": ""
+  },
+  "traceId": "sanitized"
+}

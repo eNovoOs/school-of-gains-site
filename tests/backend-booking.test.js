@@ -25,3 +25,11 @@ test('ambiguous provider timeout becomes uncertain; retry reconciles without re-
 }));
 test('read-back with another contact fails verification rather than assigning their appointment',()=>isolated(async()=>{const {input,context,event}=fixture();global.fetch=async()=>ok({event:{...event,contactId:'someone-else'}});await assert.rejects(booking.verifyAppointment(event.id,context,input),{message:'booking_verification_pending'});}));
 test('same-slot legacy appointment is not attributed to the new application',()=>isolated(async()=>{const {input,context,event}=fixture();global.fetch=async(url)=>ok(url.includes('/contacts/')?{events:[event]}:{event:{...event,description:'Original booking from another channel'}});await assert.rejects(booking.reconcile(context,input),{message:'appointment_already_exists',status:409});}));
+test('live appointment envelope is accepted and naive list dates are resolved through exact GET',()=>isolated(async()=>{
+  const {input,context,event}=fixture();
+  const actual={...event,description:'School of Gains booking reference '+input.bookingId};
+  const naive=new Date(Date.parse(input.startTime)-7*3600000).toISOString().replace('T',' ').slice(0,19);
+  global.fetch=async(url,options)=>{assert.equal(options.headers['User-Agent'],'SchoolOfGains-Attribution/1.0');return ok(url.includes('/contacts/')?{events:[{id:event.id,calendarId:event.calendarId,startTime:naive}]}:{appointment:actual,traceId:'sanitized-trace'});};
+  assert.equal((await booking.verifyAppointment(event.id,context,input)).id,event.id);
+  assert.equal((await booking.reconcile(context,input)).id,event.id);
+}));

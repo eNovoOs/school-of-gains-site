@@ -4,7 +4,7 @@ This schema and code are a preview foundation, not an activated production migra
 
 ## Dependencies and install
 
-Root package includes `pg`. The database needs PostgreSQL with a pooled TLS connection (`DATABASE_URL` supplied server-side by the approved provider). Apply `001-attribution.sql` then `002-booking.sql` and `003-closer-rotation.sql` only after backup, the correct Vercel project/environment link and disposable-database validation. It is additive and uses only the `sog_` namespace. Do not drop these tables on rollback: disable intake/sync and retain submissions, immutable events and undelivered outbox jobs. Restore app deployment and CRM configuration from the migration ledger.
+Root package includes `pg`. The database needs PostgreSQL with a pooled TLS connection (`DATABASE_URL` supplied server-side by the approved provider). Apply `001-attribution.sql` then `002-booking.sql` `003-closer-rotation.sql` and `004-provider-signals.sql` only after backup, the correct Vercel project/environment link and disposable-database validation. It is additive and uses only the `sog_` namespace. Do not drop these tables on rollback: disable intake/sync and retain submissions, immutable events and undelivered outbox jobs. Restore app deployment and CRM configuration from the migration ledger.
 
 ## HTTP contracts
 
@@ -63,3 +63,24 @@ Documentation: [free slots](https://marketplace.gohighlevel.com/docs/2021-07-28/
 After checking GHL for an existing open opportunity, a genuinely new opportunity receives the next round-robin reservation. A PostgreSQL advisory transaction lock serializes allocation across workers. The selected closer and pool version/members commit into `sog_closer_assignments` **before** the provider create request. A duplicate request, timeout, outbox rollback or retry reuses the cycle's reservation and does not consume another turn. Existing open opportunities skip the allocator entirely.
 
 The allocator uses its own small connection pool so committing an allocation cannot wait for a connection held by the parent outbox transaction. Its cycle key intentionally has no foreign key to the locked sales-cycle table; only trusted server-resolved cycle UUIDs are accepted. Keep assignment/counter records on rollback. If a selected closer leaves the team while a reservation is pending, review/reassign that reservation explicitly rather than deleting it or silently shifting the lead on retry. Updated pools affect only new reservations. With an unchanged pool, allocation counts differ by at most one; uneven existing workload is not automatically rebalanced.
+
+## Real PostgreSQL validation (explicitly gated)
+
+`scripts/validation/postgres.cjs` runs the actual schema and repository persistence functions against a **disposable test database**. It never falls back to `DATABASE_URL`. Before running, verify the Vercel project, Neon branch/database and environment, then supply `SOG_TEST_DATABASE_URL` securely (prefer a direct/unpooled URL), set `SOG_ALLOW_SCHEMA_TESTS=YES_DISPOSABLE_DATABASE`, and pass `--confirm-disposable-database=<exact database name>`. Do not paste a connection URL into a command or report.
+
+The runner creates a random `sog_test_<UUID>` schema, injects that schema into every runtime and allocation connection, verifies the connected database/schema, applies migrations001–004 twice, and exercises real concurrent duplicate intake, first-source preservation, round-robin allocation, durable reconnect/retries, appointment event guards database booking uniqueness and provider-signal inbox deduplication with a mocked provider read. Statement/lock timeouts bound failures. HTTP is disabled and GHL flags/token are removed inside the runner; no provider writes are possible through its tested paths. Finally it closes pools and drops only its generated schema. If the process is forcibly killed, an isolated `sog_test_…` schema can remain for manual cleanup; public CRM tables are never selected for cleanup.
+
+Example invocation **after** securely setting the required environment variables: `node scripts/validation/postgres.cjs --confirm-disposable-database=neondb`. The confirmation must match the actual dedicated test database name; this example is not authorization to use any database named neondb. Running the safety unit tests does not run PostgreSQL validation.
+
+
+## Provider workflow signal inbox
+
+Apply `004-provider-signals.sql` after the previous migrations before using the signal worker or updated dashboard health query. `POST /api/webhooks/ghl-signal` accepts authenticated minimal appointment/opportunity IDs and returns202 only after durable acceptance. Protected `/api/webhooks/process-signals` reads exact provider state, derives deterministic UUIDv5 and reuses canonical persistence. `GHL_SIGNALS_ENABLED` defaults false. A 90-second claim lease commits before provider/persistence work; retries are bounded at ten. Missing revision/identity and conflicting same-version state fail closed.
+
+See the internal [webhook cutover readiness note](../docs/migration/webhook-cutover-readiness.md) for sender JSON, merge-picker gaps, event-history limitations, test-notification exclusions, minimum replacement workflows and rollback. No sender, scheduler or test booking was activated.
+
+### Read-only provider contract verification — September 21, 2026
+
+Using the established application User-Agent `SchoolOfGains-Attribution/1.0`, two existing appointment GETs (confirmed and cancelled) and the main calendar free-slots GET returned HTTP200. No appointment, contact or email was created/changed. The observed GET envelope is **`appointment`**, while the documentation examples use `event`; both are supported, with the observed envelope preferred. `dateUpdated` was ISO UTC and `startTime` included a timezone offset; description was present. The date-keyed free-slot arrays matched the adapter.
+
+The contact appointment **list** snapshot contains naive calendar-local date strings. Reconciliation therefore uses list dates only as a broad candidate window and obtains authoritative offset-aware timestamps from each bounded GET before matching a slot. It never interprets the naive list timestamp as server-local time for exact matching. Initial requests using urllib's default client signature were denied by Cloudflare; the known application client header succeeded and is now set in the shared server API adapter. Sanitized regression fixture: `tests/fixtures/ghl-appointment-live-shape.json`. This validates read contracts, not appointment creation, notifications, meeting links or end-to-end lifecycle delivery.

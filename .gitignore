@@ -4,3 +4,4 @@ public
 
 .env*
 !.env.attribution.example
+.env*.local

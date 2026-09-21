@@ -17,6 +17,8 @@
       row($('pipeline'),'Awaiting first booking',fmt(data.health.unbookedCycles));
       row($('health'),'Pending CRM deliveries',fmt(data.health.pendingDeliveries));
       row($('health'),'Failed CRM deliveries',fmt(data.health.failedDeliveries));
+      row($('health'),'Pending provider signals',fmt(data.health.pendingSignals));
+      row($('health'),'Signals requiring review',fmt(data.health.failedSignals));
       row($('health'),'Applications without source',fmt(data.summary.applications-data.summary.attributedApplications));
       row($('health'),'Last verified booking event',data.health.lastBookingEvent ? new Date(data.health.lastBookingEvent).toLocaleString() : 'None recorded');
       $('status').textContent='Updated '+new Date(data.generatedAt).toLocaleString()+'. Window: '+data.window.start.slice(0,10)+' to '+data.window.end.slice(0,10)+' UTC.';
