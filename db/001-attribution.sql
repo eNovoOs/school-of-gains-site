@@ -1,0 +1,14 @@
+-- Forward-only initial schema; do not run against production without a backup and launch gate.
+BEGIN;
+CREATE TABLE IF NOT EXISTS sog_journeys (id uuid PRIMARY KEY, first_touch jsonb NOT NULL, latest_touch jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS sog_contacts (id uuid PRIMARY KEY, email text UNIQUE NOT NULL, ghl_contact_id text UNIQUE, first_touch jsonb NOT NULL, latest_touch jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS sog_events (event_id uuid PRIMARY KEY, type text NOT NULL, journey_id uuid REFERENCES sog_journeys(id), contact_id uuid REFERENCES sog_contacts(id), occurred_at timestamptz NOT NULL DEFAULT now(), received_at timestamptz NOT NULL DEFAULT now(), payload jsonb NOT NULL);
+CREATE TABLE IF NOT EXISTS sog_sales_cycles (id uuid PRIMARY KEY, contact_id uuid NOT NULL REFERENCES sog_contacts(id), offer_id text NOT NULL DEFAULT 'apprentice', status text NOT NULL DEFAULT 'open' CHECK (status IN ('open','won','lost','review')), stage text NOT NULL DEFAULT 'unbooked', ghl_opportunity_id text UNIQUE, booking_setter_id text, provider_updated_at timestamptz, created_at timestamptz NOT NULL DEFAULT now());
+CREATE UNIQUE INDEX IF NOT EXISTS sog_one_active_cycle ON sog_sales_cycles(contact_id,offer_id) WHERE status IN ('open','review');
+CREATE TABLE IF NOT EXISTS sog_applications (id uuid PRIMARY KEY REFERENCES sog_events(event_id), contact_id uuid NOT NULL REFERENCES sog_contacts(id), journey_id uuid NOT NULL REFERENCES sog_journeys(id), cycle_id uuid NOT NULL REFERENCES sog_sales_cycles(id), quiz_version text NOT NULL, answers jsonb NOT NULL, consent jsonb NOT NULL, attribution jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS sog_appointments (id text PRIMARY KEY, contact_id uuid NOT NULL REFERENCES sog_contacts(id), cycle_id uuid REFERENCES sog_sales_cycles(id), calendar_id text NOT NULL, status text NOT NULL, starts_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, attribution jsonb NOT NULL, booking_setter_id text);
+CREATE TABLE IF NOT EXISTS sog_outbox (id bigserial PRIMARY KEY, event_id uuid UNIQUE NOT NULL REFERENCES sog_events(event_id), type text NOT NULL, payload jsonb NOT NULL, status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','delivered','failed')), attempts integer NOT NULL DEFAULT 0, last_error text, available_at timestamptz NOT NULL DEFAULT now(), created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS sog_rate_limits (key text PRIMARY KEY, count integer NOT NULL, expires_at timestamptz NOT NULL);
+CREATE INDEX IF NOT EXISTS sog_events_reporting ON sog_events(type,occurred_at);
+CREATE INDEX IF NOT EXISTS sog_outbox_pending ON sog_outbox(status,available_at);
+COMMIT;

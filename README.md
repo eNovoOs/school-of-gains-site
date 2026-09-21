@@ -1,10 +1,10 @@
-# School of Gains — Home Page (static mirror)
+# School of Gains — website and attribution
 
-A static mirror of [school-of-gains.com/home-page](https://school-of-gains.com/home-page).
+Versioned legacy pages plus native acquisition pages and server-side attribution APIs, deployed on Vercel.
 
-The build step (`build.mjs`) fetches the live home page at deploy time and writes it to
-`public/index.html`, which Vercel serves as a static site. All images, CSS, JS and fonts
-load from their original CDNs, so the mirror renders identically to the source.
+`node build.mjs` builds **offline** from the checked-in `src/legacy/` snapshot and its verified SHA-256 manifest. It never fetches the live apex during a normal deployment. The legacy homepage remains `/`; native `/links`, `/apprentice`, `/apply`, `/book` and `/dashboard` are copied over their routes. Both legacy root brand assets and `/assets/` URLs are served. Existing legacy CDN dependencies remain external.
+
+See [frozen-source instructions](src/legacy/README.md) for deliberate refresh and rollback, [live change register](docs/migration/live-change-register.md) for external mutations, and [verification report](docs/migration/integrated-verification-report.md) for tested behavior and remaining launch gates. Server configuration names are listed in `.env.attribution.example`; credentials must remain in the runtime environment, never browser bundles or Git. The new intake and GHL synchronization stay disabled until configured and verified.
 
 ## Deploy settings
 

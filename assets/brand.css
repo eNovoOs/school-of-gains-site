@@ -1,0 +1,44 @@
+/* Show the original hat artwork without the lettering underneath it. */
+.sog-brand {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+.sog-brand .sog-cap {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 64px;
+  width: 64px;
+  height: 45px;
+}
+.sog-brand .sog-cap img {
+  position: absolute !important;
+  /* Original artwork: 1080 × 1258; hat bounds: x=149–934, y=31–580. */
+  width: 88px !important;
+  height: auto !important;
+  max-width: none !important;
+  left: -12px !important;
+  top: -2px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.sog-brand .sog-wordmark {
+  display: block !important;
+  font-family: 'Century Gothic', CenturyGothic, 'Avenir Next', Avenir, sans-serif !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.5px !important;
+  line-height: 1.15 !important;
+  text-transform: none !important;
+  white-space: nowrap;
+  color: #fff;
+}
+.sog-brand .sog-wordmark .green { color: #00c948; }
+@media (max-width: 480px) {
+  .sog-brand { gap: 9px !important; }
+  .sog-brand .sog-wordmark { font-size: 17px !important; }
+  .nav:has(> .sog-brand) { padding-inline: 16px; gap: 12px; flex-wrap: wrap; }
+}
