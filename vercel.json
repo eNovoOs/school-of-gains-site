@@ -2,5 +2,13 @@
   "buildCommand": "node build.mjs",
   "outputDirectory": "public",
   "framework": null,
-  "cleanUrls": true
+  "cleanUrls": true,
+  "functions": {
+    "api/webhooks/process.js": { "maxDuration": 120 },
+    "api/webhooks/process-signals.js": { "maxDuration": 120 }
+  },
+  "crons": [
+    { "path": "/api/webhooks/process-signals", "schedule": "* * * * *" },
+    { "path": "/api/webhooks/process", "schedule": "* * * * *" }
+  ]
 }
