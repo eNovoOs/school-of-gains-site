@@ -56,3 +56,9 @@ test('standard webhook customData is projected without retaining its built-in co
  assert.throws(()=>signal({...payload,calendar:{appointmentId:'another'}}),/conflicting_signal_resource/);
  assert.throws(()=>signal({...payload,customData:[]}),/invalid_custom_data/);
 });
+test('expired signal claimant cannot report delivery after another worker takes its lease',async()=>{
+ const base=storage();const query=base.db.query;const db={...base.db,query:async(sql,args)=>{const result=await query(sql,args);return sql.includes("status='delivered'")?{...result,rowCount:0}:result;}};
+ const result=await processOne({db,read:async()=>({appointment})});
+ assert.equal(result.processed,0);assert.equal(result.lostLease,true);
+ assert.ok(base.writes.at(-1).sql.includes('claim_token=$3'));
+});
