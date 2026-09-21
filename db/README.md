@@ -4,7 +4,7 @@ This schema and code are a preview foundation, not an activated production migra
 
 ## Dependencies and install
 
-Root package includes `pg`. The database needs PostgreSQL with a pooled TLS connection (`DATABASE_URL` supplied server-side by the approved provider). Apply `001-attribution.sql` and then `002-booking.sql` only after backup, the correct Vercel project/environment link and disposable-database validation. It is additive and uses only the `sog_` namespace. Do not drop these tables on rollback: disable intake/sync and retain submissions, immutable events and undelivered outbox jobs. Restore app deployment and CRM configuration from the migration ledger.
+Root package includes `pg`. The database needs PostgreSQL with a pooled TLS connection (`DATABASE_URL` supplied server-side by the approved provider). Apply `001-attribution.sql` then `002-booking.sql` and `003-closer-rotation.sql` only after backup, the correct Vercel project/environment link and disposable-database validation. It is additive and uses only the `sog_` namespace. Do not drop these tables on rollback: disable intake/sync and retain submissions, immutable events and undelivered outbox jobs. Restore app deployment and CRM configuration from the migration ledger.
 
 ## HTTP contracts
 
@@ -17,7 +17,7 @@ Root package includes `pg`. The database needs PostgreSQL with a pooled TLS conn
 
 ## GHL mappings
 
-Location is fixed to `3mi3YQaZvtUMZzaQUuL6`; only `GxJOcIsgv7Svx90E2BZr` is used for new Apprentice opportunities. Existing setter pipeline is not changed by these endpoints. `GHL_UNBOOKED_STAGE_ID=6b696d4a-3373-4f95-b880-a6cd524f727a` was verified in the retained closer pipeline. `GHL_DEFAULT_CLOSER_ID` must be a verified active closer. The ten provisioned field IDs are in `docs/migration/ghl-field-map.json` and the non-secret example environment. New application starts unbooked; active remote opportunity retains owner and stage. Multiple active matches require review. Prior won contacts require review rather than another acquisition opportunity.
+Location is fixed to `3mi3YQaZvtUMZzaQUuL6`; only `GxJOcIsgv7Svx90E2BZr` is used for new Apprentice opportunities. Existing setter pipeline is not changed by these endpoints. `GHL_UNBOOKED_STAGE_ID=6b696d4a-3373-4f95-b880-a6cd524f727a` was verified in the retained closer pipeline. `GHL_CLOSER_IDS` is an ordered comma-separated pool of verified active closers. New unbooked opportunities rotate evenly through this pool; existing opportunity owners remain unchanged. The ten provisioned field IDs are in `docs/migration/ghl-field-map.json` and the non-secret example environment. New application starts unbooked; active remote opportunity retains owner and stage. Multiple active matches require review. Prior won contacts require review rather than another acquisition opportunity.
 
 `GHL_STAGE_IDS_JSON` must map local `unbooked`, `booked`, `call_held`, `no_show`, `follow_up` plus any operational mapping needed to actual main closer stage IDs. An unknown legacy remote stage blocks automatic stage updates. Closed or progressed opportunities cannot regress on a booking event.
 
@@ -55,3 +55,11 @@ Ambiguous timeouts or 5xx return HTTP202 `{ok:true,booked:false,pending:true,rea
 Only one active intent is allowed per sales cycle, including across applications and browser reloads. Negative lifecycle events release a cancelled/invalid intent after recording the provider event. A confirmed intent and its history are retained, never deleted to permit retries. The native endpoints never derive booking setter credit from UTMs; verified staff workflows supply it separately.
 
 Documentation: [free slots](https://marketplace.gohighlevel.com/docs/2021-07-28/ghl/calendars/get-slots/index.html), [create appointment](https://marketplace.gohighlevel.com/docs/2021-07-28/ghl/calendars/create-appointment/index.html), [get appointment](https://marketplace.gohighlevel.com/docs/2021-07-28/ghl/calendars/get-appointment/index.html), [contact appointments scope](https://marketplace.gohighlevel.com/docs/Authorization/Scopes/index.html).
+
+## Closer distribution
+
+`GHL_CLOSER_IDS=BCR448vrYnQHOwub4MEd,Rt4YE2nRGqKHwKkq2jVo` is the currently verified two-closer pool. This controls new **unbooked** applications only. It does not change the calendar's OptimizeForAvailability scheduling rule, reassign existing open opportunities, or grant booking setter credit.
+
+After checking GHL for an existing open opportunity, a genuinely new opportunity receives the next round-robin reservation. A PostgreSQL advisory transaction lock serializes allocation across workers. The selected closer and pool version/members commit into `sog_closer_assignments` **before** the provider create request. A duplicate request, timeout, outbox rollback or retry reuses the cycle's reservation and does not consume another turn. Existing open opportunities skip the allocator entirely.
+
+The allocator uses its own small connection pool so committing an allocation cannot wait for a connection held by the parent outbox transaction. Its cycle key intentionally has no foreign key to the locked sales-cycle table; only trusted server-resolved cycle UUIDs are accepted. Keep assignment/counter records on rollback. If a selected closer leaves the team while a reservation is pending, review/reassign that reservation explicitly rather than deleting it or silently shifting the lead on retry. Updated pools affect only new reservations. With an unchanged pool, allocation counts differ by at most one; uneven existing workload is not automatically rebalanced.
