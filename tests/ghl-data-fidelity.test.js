@@ -16,3 +16,17 @@ test('latest repeated application updates standard profile and full custom field
  const c={query:async sql=>{if(sql.startsWith('SELECT * FROM sog_contacts'))return {rows:[{id:'local',ghl_contact_id:'ghl'}]};if(sql.startsWith('SELECT * FROM sog_sales_cycles'))return {rows:[{id:'cycle',ghl_opportunity_id:'existing'}]};if(sql.startsWith('SELECT id,created_at'))return {rows:[stored]};if(sql.startsWith('SELECT email,first_touch'))return {rows:[{...canonical,email:'person@example.com'}]};return {rows:[]};}};
  try{await syncApplication(c,{contactId:'local',cycleId:'cycle',submissionId:'application',contact:{email:'person@example.com',firstName:'New Name',phone:'+15555550100'}});assert.equal(calls.length,2);assert.equal(calls[0].options.method,'GET');const update=JSON.parse(calls[1].options.body);assert.equal(update.firstName,'New Name');assert.equal(update.phone,'+15555550100');assert.equal(update.customFields.length,22);}finally{global.fetch=oldFetch;for(const k of Object.keys(process.env))if(!(k in oldEnv))delete process.env[k];Object.assign(process.env,oldEnv);}
 });
+
+test('new opportunity creation follows successful application field sync; failed writes and stale jobs cannot create',async()=>{
+ const allocator=require('../lib/attribution-assignment'),oldReserve=allocator.reserveCloser,oldFetch=global.fetch,oldEnv={...process.env};
+ Object.assign(process.env,{GHL_SYNC_ENABLED:'true',GHL_PRIVATE_INTEGRATION_TOKEN:'test',GHL_UNBOOKED_STAGE_ID:'stage',GHL_ATTRIBUTION_FIELDS_JSON:JSON.stringify(ids)});
+ let mode='success',calls=[];allocator.reserveCloser=async()=>{calls.push('reserve');return 'closer';};
+ global.fetch=async(url,options)=>{const action=options.method+' '+new URL(url).pathname;calls.push(action);if(action==='PUT /contacts/ghl' && mode==='failed')return {ok:false,status:503};return {ok:true,json:async()=>url.includes('/contacts/')?{contact:{id:'ghl',email:'person@example.com'}}:options.method==='POST'?{opportunity:{id:'new-opp',pipelineStageId:'stage'}}:{opportunities:[]}};};
+ const c={query:async sql=>{if(sql.startsWith('SELECT * FROM sog_contacts'))return {rows:[{id:'local',ghl_contact_id:'ghl'}]};if(sql.startsWith('SELECT * FROM sog_sales_cycles'))return {rows:[{id:stored.cycle_id}]};if(sql.startsWith('SELECT id,created_at'))return {rows:[{...stored,id:mode==='stale'?'newer':stored.id}]};if(sql.startsWith('SELECT email,first_touch'))return {rows:[{...canonical,email:'person@example.com'}]};return {rows:[]};}};
+ const input={contactId:'local',cycleId:stored.cycle_id,submissionId:stored.id,contact:{email:'person@example.com'}};
+ try{
+  await syncApplication(c,input);assert.ok(calls.indexOf('PUT /contacts/ghl')<calls.indexOf('POST /opportunities/'));assert.equal(calls.filter(x=>x==='PUT /contacts/ghl').length,1);
+  calls=[];mode='failed';await assert.rejects(syncApplication(c,input),/ghl_http_503/);assert.equal(calls.includes('reserve'),false);assert.equal(calls.includes('POST /opportunities/'),false);
+  calls=[];mode='stale';assert.equal((await syncApplication(c,input)).superseded,true);assert.deepEqual(calls,['GET /opportunities/search']);
+ }finally{allocator.reserveCloser=oldReserve;global.fetch=oldFetch;for(const key of Object.keys(process.env))if(!(key in oldEnv))delete process.env[key];Object.assign(process.env,oldEnv);}
+});

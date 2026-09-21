@@ -33,3 +33,9 @@ test('live appointment envelope is accepted and naive list dates are resolved th
   assert.equal((await booking.verifyAppointment(event.id,context,input)).id,event.id);
   assert.equal((await booking.reconcile(context,input)).id,event.id);
 }));
+
+test('booking context checks canonical contact against current pilot allowlist before accepting old handoff',()=>isolated(async()=>{
+ const {context}=fixture();process.env.ATTRIBUTION_PILOT_EMAILS='allowed@example.com';const ref=new URL(bookingPath(context.id),'https://example.com').searchParams.get('ref');
+ let email='outside@example.com';db.query=async sql=>{assert.ok(sql.includes('c.email'));return {rows:[{...context,email}]};};
+ await assert.rejects(booking.contextFor(ref),{message:'intake_unavailable',status:503});email='allowed@example.com';assert.equal((await booking.contextFor(ref)).id,context.id);
+}));

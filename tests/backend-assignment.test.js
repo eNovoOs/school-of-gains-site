@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {randomUUID}=require('node:crypto');
 const allocator=require('../lib/attribution-assignment');
-const {syncApplication}=require('../lib/attribution-ghl');
+const {syncApplication,FIELD_KEYS}=require('../lib/attribution-ghl');
 const ids=['BCR448vrYnQHOwub4MEd','Rt4YE2nRGqKHwKkq2jVo'];
 function store(){
   const assignments=new Map();let position=0n,tail=Promise.resolve(),locks=0;
@@ -30,8 +30,9 @@ test('existing open opportunity retains owner and consumes no rotation turn',asy
 test('provider create happens after reservation commit and timeout retry retains selected closer',async()=>{
   const oldFetch=global.fetch,oldReserve=allocator.reserveCloser,oldEnv={...process.env};Object.assign(process.env,{GHL_SYNC_ENABLED:'true',GHL_PRIVATE_INTEGRATION_TOKEN:'test',GHL_UNBOOKED_STAGE_ID:'stage'});
   const s=store(),cycle=randomUUID(),owners=[];let committed=false;
+  process.env.GHL_ATTRIBUTION_FIELDS_JSON=JSON.stringify(Object.fromEntries(FIELD_KEYS.map(k=>[k,k])));
   allocator.reserveCloser=async id=>{const result=await allocatorOriginal(id,ids,s.transaction);committed=true;return result};const allocatorOriginal=oldReserve;
-  global.fetch=async(url,options)=>{if(options.method==='POST'){assert.equal(committed,true);owners.push(JSON.parse(options.body).assignedTo);throw new Error('provider timeout');}return {ok:true,json:async()=>({opportunities:[]})};};
-  const c={query:async sql=>{if(sql.startsWith('SELECT * FROM sog_contacts'))return {rows:[{id:'local',ghl_contact_id:'ghl'}]};if(sql.startsWith('SELECT * FROM sog_sales_cycles'))return {rows:[{id:cycle}]};return {rows:[]};}};
-  try{for(let i=0;i<2;i++){committed=false;await assert.rejects(syncApplication(c,{contactId:'local',cycleId:cycle}),{message:'provider timeout'});}assert.deepEqual(owners,[ids[0],ids[0]]);assert.equal(s.position,1n);}finally{global.fetch=oldFetch;allocator.reserveCloser=oldReserve;for(const k of Object.keys(process.env))if(!(k in oldEnv))delete process.env[k];Object.assign(process.env,oldEnv);}
+  global.fetch=async(url,options)=>{if(options.method==='POST'){assert.equal(committed,true);owners.push(JSON.parse(options.body).assignedTo);throw new Error('provider timeout');}return {ok:true,json:async()=>url.includes('/contacts/')?{contact:{id:'ghl',email:'person@example.com'}}:{opportunities:[]}};};
+  const c={query:async sql=>{if(sql.startsWith('SELECT * FROM sog_contacts'))return {rows:[{id:'local',ghl_contact_id:'ghl'}]};if(sql.startsWith('SELECT * FROM sog_sales_cycles'))return {rows:[{id:cycle}]};if(sql.startsWith('SELECT id,created_at'))return {rows:[{id:'submission',cycle_id:cycle,created_at:new Date(),answers:{},consent:{}}]};if(sql.startsWith('SELECT email,first_touch'))return {rows:[{email:'person@example.com',first_touch:{},latest_touch:{}}]};return {rows:[]};}};
+  try{for(let i=0;i<2;i++){committed=false;await assert.rejects(syncApplication(c,{contactId:'local',cycleId:cycle,submissionId:'submission'}),{message:'provider timeout'});}assert.deepEqual(owners,[ids[0],ids[0]]);assert.equal(s.position,1n);}finally{global.fetch=oldFetch;allocator.reserveCloser=oldReserve;for(const k of Object.keys(process.env))if(!(k in oldEnv))delete process.env[k];Object.assign(process.env,oldEnv);}
 });
