@@ -46,6 +46,17 @@ async function run(argv=process.argv.slice(2),env=process.env) {
     const {rows:tables}=await db.query('SELECT table_name FROM information_schema.tables WHERE table_schema=$1',[config.schema]);
     assert.equal(tables.length,12);
     check('migrations 001–004 apply and reapply inside disposable schema');
+    if(argv.includes('--outbox-only')) {
+      const contactId=randomUUID(),cycleId=randomUUID(),eventId=randomUUID();
+      await db.query("INSERT INTO sog_contacts(id,email,first_touch,latest_touch) VALUES($1,'outbox-test@example.invalid','{}','{}')",[contactId]);
+      await db.query("INSERT INTO sog_sales_cycles(id,contact_id,status,stage) VALUES($1,$2,'open','unbooked')",[cycleId,contactId]);
+      await db.query("INSERT INTO sog_events(event_id,type,payload) VALUES($1,'quiz_submitted','{}')",[eventId]);
+      await db.query("INSERT INTO sog_outbox(event_id,type,payload) VALUES($1,'application','{}')",[eventId]);
+      await require('./outbox-failure-fixture.cjs')(db,cycleId);
+      check('outbox SQL errors persist all ten attempts while delivery writes roll back');
+      process.stdout.write(JSON.stringify({ok:true,checks:checks.length,providerWrites:0,scope:'random disposable schema',focus:'outbox'})+'\n');
+      return;
+    }
     const {application}=require('../../lib/attribution');
     const form=(email,source='meetup')=>application({submissionId:randomUUID(),journeyId:randomUUID(),quizVersion:'apprentice-v1',contact:{email,firstName:'Database Test'},consent:{privacy:true,marketing:false},answers:{ageRange:'30_39',goals:['build_system'],weeklyTime:'3_5_hours',educationBudget:'not_ready',attendance:'unsure'},attribution:{utm_source:source,utm_medium:'offline'}});
     const input=form('postgres-validation@example.invalid');
@@ -109,6 +120,8 @@ async function run(argv=process.argv.slice(2),env=process.env) {
     check('provider signal inbox processes duplicate readbacks once without HTTP');
     await db.rateLimit('integration-limit',1);await assert.rejects(db.rateLimit('integration-limit',1),{message:'rate_limited'});
     check('durable rate limiting increments atomically');
+    await require('./outbox-failure-fixture.cjs')(db,cycle.id);
+    check('outbox SQL failures roll back delivery writes and commit retry counters through terminal exhaustion');
     await require('./dashboard-fixtures.cjs')(db,contact.id,newCycle.id,input.journeyId);
     check('dashboard campaign dimensions and current outcomes share a deduplicated first-booked cohort');
     process.stdout.write(JSON.stringify({ok:true,checks:checks.length,providerWrites:0,scope:'random disposable schema'})+'\n');

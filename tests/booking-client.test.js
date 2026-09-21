@@ -98,3 +98,45 @@ test('cancelled and invalid appointments allow a fresh booking without restoring
   assert.notEqual(r.elements['#booking-heading'].textContent, 'Your call is booked.');
  }
 });
+
+async function syncing(contexts) {
+  const elements={},handlers={},timers=new Map(),calls=[];let timerId=0;
+  const document={hidden:false,addEventListener(name,fn){handlers[name]=fn;},querySelector(id){return elements[id] ||= {textContent:'',innerHTML:'',hidden:true,handlers:{},addEventListener(name,fn){this.handlers[name]=fn;},querySelectorAll(){return [];}};}};
+  const flush=()=>new Promise(resolve=>setImmediate(resolve));
+  vm.runInNewContext(script,{document,location:{search:'?ref=opaque_signed_reference_123456789'},URLSearchParams,setTimeout(fn,delay){timers.set(++timerId,{fn,delay});return timerId;},clearTimeout(id){timers.delete(id);},fetch:async url=>{calls.push(url);const body=url.startsWith('/api/booking-slots')?{ok:true,slots:[]}:(contexts.length>1?contexts.shift():contexts[0]);return {ok:true,status:200,json:async()=>body};}});
+  await flush();
+  return {elements,calls,timers,async tick(){const [id,t]=timers.entries().next().value;timers.delete(id);t.fn();await flush();},async visibility(hidden){document.hidden=hidden;handlers.visibilitychange();await flush();},async refresh(){await elements['#booking-refresh'].handlers.click();await flush();}};
+}
+const pendingSync={ok:true,bookingEnabled:false,crmPending:true,reason:'contact_sync_pending'};
+test('actual pending CRM sync automatically advances to slots without another submission or booking',async()=>{
+ const r=await syncing([pendingSync,{ok:true,bookingEnabled:true}]);
+ assert.match(r.elements['#booking-detail-heading'].textContent,/Preparing/);assert.equal(r.timers.size,1);
+ await r.tick();assert.equal(r.elements['#booking-picker'].hidden,false);assert.equal(r.timers.size,0);
+ assert.equal(r.calls.filter(x=>x.startsWith('/api/booking-context')).length,2);
+ assert.ok(r.calls.every(x=>x.startsWith('/api/booking-context')||x.startsWith('/api/booking-slots')));
+});
+test('sync polling backs off, stops after bounded attempts and supports explicit refresh',async()=>{
+ const r=await syncing([pendingSync]);const delays=[];
+ while(r.timers.size){delays.push(r.timers.values().next().value.delay);await r.tick();}
+ assert.deepEqual(delays,[2000,4000,8000,16000,30000,30000]);assert.equal(r.calls.length,7);
+ assert.match(r.elements['#booking-detail'].textContent,/taking longer/);assert.equal(r.elements['#booking-refresh'].disabled,false);
+ await r.refresh();assert.equal(r.timers.size,1);assert.equal(r.calls.length,8);
+});
+test('hidden page pauses pending sync; review and disabled responses never automatically poll',async()=>{
+ const r=await syncing([pendingSync]);await r.visibility(true);assert.equal(r.timers.size,0);assert.equal(r.calls.length,1);
+ await r.visibility(false);assert.equal(r.timers.size,1);
+ for(const context of [{ok:true,bookingEnabled:false,crmPending:false,reason:'contact_sync_pending'},{ok:true,bookingEnabled:false,crmPending:false,reason:'sales_review_required'},{ok:true,bookingEnabled:false,reason:'calendar_integration_pending'}]) {
+  const stopped=await syncing([context]);assert.equal(stopped.timers.size,0);assert.equal(stopped.calls.length,1);
+ }
+});
+test('context API reports polling only for pending delivery on an enabled eligible open cycle',async()=>{
+ const apiScript=fs.readFileSync(require('node:path').join(__dirname,'../api/booking-context.js'),'utf8');
+ const base={id:'application',cycle_id:'cycle',cycle_status:'open',cycle_stage:'unbooked',crm_status:'pending'};
+ for(const [patch,enabled,pending] of [[{},true,true],[{},false,false],[{crm_status:'failed'},true,false],[{crm_status:null},true,false],[{cycle_status:'won'},true,false],[{cycle_stage:'legacy_review'},true,false],[{cycle_stage:'customer_review'},true,false]]) {
+  const module={exports:{}};
+  vm.runInNewContext(apiScript,{module,require(name){if(name.endsWith('attribution-booking'))return {contextFor:async()=>({...base,...patch}),config:()=>({enabled})};if(name.endsWith('attribution-db'))return {query:async()=>({rows:[]})};if(name.endsWith('attribution-http'))return {fail(){throw Error('unexpected failure');}};return {InputError:Error};}});
+  let body;await module.exports({method:'GET',query:{ref:'opaque'}},{setHeader(){},status(){return this;},json(value){body=value;}});
+  assert.equal(body.crmPending,pending);assert.equal(body.bookingEnabled,false);
+  if(pending)assert.equal(body.reason,'contact_sync_pending');
+ }
+});

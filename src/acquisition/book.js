@@ -15,6 +15,16 @@ const confirmButton = document.querySelector('#confirm-booking');
 const bookingError = document.querySelector('#booking-error');
 const ref = new URLSearchParams(location.search).get('ref') || '';
 let loading = false;
+let syncTimer = null;
+let syncPolls = 0;
+let syncPending = false;
+const SYNC_DELAYS = [2000, 4000, 8000, 16000, 30000, 30000];
+function stopSyncTimer() { if (syncTimer !== null) { clearTimeout(syncTimer); syncTimer = null; } }
+function scheduleSyncCheck() {
+  stopSyncTimer();
+  if (!syncPending || document.hidden || syncPolls >= SYNC_DELAYS.length) return;
+  syncTimer = setTimeout(() => { syncTimer = null; syncPolls++; check(); }, SYNC_DELAYS[syncPolls]);
+}
 let week = 0;
 let slotRequest = 0;
 let selectedSlot = '';
@@ -121,6 +131,8 @@ function restoreExisting(existing) {
 }
 async function check() {
   if (loading || confirmed) return;
+  stopSyncTimer();
+  syncPending = false;
   if (awaitingVerification) { await confirm(); return; }
   if (!/^[A-Za-z0-9_.-]{20,2048}$/.test(ref)) {
     heading.textContent = 'Start with your application.';
@@ -153,6 +165,12 @@ async function check() {
         picker.hidden = false;
         if (!timezoneSelect.innerHTML) setupTimezones();
         await loadSlots();
+      } else if (result.crmPending === true && result.reason === 'contact_sync_pending') {
+        picker.hidden = true;
+        syncPending = true;
+        detailHeading.textContent = 'Preparing your booking options…';
+        detail.textContent = syncPolls < SYNC_DELAYS.length ? 'Your application is saved. We’re preparing your booking options and will check again automatically. No appointment has been booked.' : 'Your application is saved, but preparing your booking options is taking longer than expected. Use “Check again” in a little while. You do not need to submit another application.';
+        scheduleSyncCheck();
       } else {
         picker.hidden = true;
         detailHeading.textContent = result.reason === 'sales_review_required' ? 'Please contact our sales team.' : 'Scheduling is not available yet.';
@@ -225,5 +243,11 @@ timezoneSelect.addEventListener('change', () => { if (!awaitingVerification) { t
 previousWeek.addEventListener('click', () => { if (week > 0 && !awaitingVerification) { week--; loadSlots(); } });
 nextWeek.addEventListener('click', () => { if (week < 3 && !awaitingVerification) { week++; loadSlots(); } });
 confirmButton.addEventListener('click', confirm);
-refresh.addEventListener('click', check);
+refresh.addEventListener('click', () => { syncPolls = 0; check(); });
+document.addEventListener?.('visibilitychange', () => {
+  if (document.hidden) stopSyncTimer();
+  else scheduleSyncCheck();
+});
+// Leaving this page never leaves a background CRM polling loop running.
+if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { syncPending = false; stopSyncTimer(); });
 check();
