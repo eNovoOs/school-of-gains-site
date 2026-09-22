@@ -1,0 +1,10 @@
+BEGIN;
+ALTER TABLE sog_booking_intents ADD COLUMN IF NOT EXISTS calendar_id text;
+ALTER TABLE sog_booking_intents ADD COLUMN IF NOT EXISTS recovery_status text NOT NULL DEFAULT 'pending' CHECK(recovery_status IN ('pending','resolved','review'));
+ALTER TABLE sog_booking_intents ADD COLUMN IF NOT EXISTS recovery_attempts integer NOT NULL DEFAULT 0;
+ALTER TABLE sog_booking_intents ADD COLUMN IF NOT EXISTS recovery_available_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE sog_booking_intents ADD COLUMN IF NOT EXISTS recovery_lease_until timestamptz;
+ALTER TABLE sog_booking_intents ADD COLUMN IF NOT EXISTS recovery_claim_token uuid;
+ALTER TABLE sog_booking_intents ADD COLUMN IF NOT EXISTS recovery_last_error text;
+CREATE INDEX IF NOT EXISTS sog_booking_recovery_pending ON sog_booking_intents(recovery_available_at) WHERE recovery_status='pending' AND state IN ('pending','uncertain');
+COMMIT;

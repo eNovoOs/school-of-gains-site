@@ -43,3 +43,17 @@ test('refresh failures and logout clear previously rendered campaign and outcome
   b.setData(baseline());await b.refresh();assert.equal(b.get('outcomes').children.length,5);
   await b.logout();assert.equal(b.get('outcomes').children.length,0);assert.equal(b.get('campaigns').children.length,0);assert.equal(b.get('report').hidden,true);
 });
+
+test('booking recovery health remains separate from confirmed bookings and missing counts are unavailable',async()=>{
+ const b=await dashboard({...baseline(),health:{pendingBookingRecoveries:4,reviewBookingRecoveries:2}});
+ const recoveryRows=()=>b.get('health').children.slice(0,2).map(r=>r.children.map(c=>c.textContent));
+ assert.deepEqual(recoveryRows(),[['Booking requests being checked','4'],['Booking requests needing review','2']]);
+ assert.equal(b.get('metrics').children[2].children[1].textContent,'1');
+ b.setData({...baseline(),health:{pendingBookingRecoveries:0}});await b.refresh();
+ assert.deepEqual(recoveryRows(),[['Booking requests being checked','0'],['Booking requests needing review','Unavailable']]);
+ b.setData({...baseline(),health:{pendingBookingRecoveries:-1,reviewBookingRecoveries:'2'}});await b.refresh();
+ assert.deepEqual(recoveryRows().map(r=>r[1]),['Unavailable','Unavailable']);
+ b.setData(null);await b.refresh();assert.equal(b.get('health').children.length,0);
+ b.setData({...baseline(),health:{pendingBookingRecoveries:4,reviewBookingRecoveries:2}});await b.refresh();
+ await b.logout();assert.equal(b.get('health').children.length,0);
+});

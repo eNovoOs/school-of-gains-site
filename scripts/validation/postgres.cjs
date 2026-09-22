@@ -38,14 +38,20 @@ async function run(argv=process.argv.slice(2),env=process.env) {
     allocation=require('../../lib/attribution-assignment');
     assert.equal((await db.query('SELECT current_schema() AS name')).rows[0].name,config.schema,'Runtime pool is not isolated');
     migrationConnection=await db.getPool().connect();
-    for(let pass=0;pass<2;pass++)for(const file of ['001-attribution.sql','002-booking.sql','003-closer-rotation.sql','004-provider-signals.sql']) {
+    for(let pass=0;pass<2;pass++)for(const file of ['001-attribution.sql','002-booking.sql','003-closer-rotation.sql','004-provider-signals.sql','005-booking-recovery.sql']) {
       assert.equal((await migrationConnection.query('SELECT current_schema() AS name')).rows[0].name,config.schema);
       await migrationConnection.query(await fs.readFile(path.join(__dirname,'../../db',file),'utf8'));
     }
     migrationConnection.release();migrationConnection=null;
     const {rows:tables}=await db.query('SELECT table_name FROM information_schema.tables WHERE table_schema=$1',[config.schema]);
     assert.equal(tables.length,12);
-    check('migrations 001–004 apply and reapply inside disposable schema');
+    check('migrations 001–005 apply and reapply inside disposable schema');
+    if(argv.includes('--recovery-only')) {
+      await require('./booking-recovery-fixture.cjs')(db);
+      check('recovery concurrency, lease fencing, moved booking and cancellation persist atomically');
+      process.stdout.write(JSON.stringify({ok:true,checks:checks.length,providerWrites:0,scope:'random disposable schema',focus:'recovery'})+'\n');
+      return;
+    }
     if(argv.includes('--outbox-only')) {
       const contactId=randomUUID(),cycleId=randomUUID(),eventId=randomUUID();
       await db.query("INSERT INTO sog_contacts(id,email,first_touch,latest_touch) VALUES($1,'outbox-test@example.invalid','{}','{}')",[contactId]);

@@ -37,7 +37,7 @@ async function interactive(responses) {
   const document = { querySelector(id) { return elements[id] ||= { textContent: '', innerHTML: '', hidden: true, handlers: {}, addEventListener(event, handler) { this.handlers[event] = handler; }, querySelectorAll() { return [slot]; } }; } };
   const fetch = async (url, config) => {
     calls.push({ url, config });
-    const response = url.startsWith('/api/booking-context') ? { ok: true, status: 200, body: { ok: true, bookingEnabled: true, existingBooking: responses.existing || null } } : url.startsWith('/api/booking-slots') ? { ok: true, status: 200, body: { ok: true, slots: [slotTime] } } : responses.posts.shift();
+    const response = url.startsWith('/api/booking-context') ? { ok: true, status: 200, body: { ok: true, bookingEnabled: true, existingBooking: responses.contexts?.length ? responses.contexts.shift() : responses.existing || null } } : url.startsWith('/api/booking-slots') ? { ok: true, status: 200, body: { ok: true, slots: [slotTime] } } : responses.posts.shift();
     return { ok: response.ok, status: response.status, json: async () => response.body };
   };
   vm.runInNewContext(script, { document, location: { search: '?ref=opaque_signed_reference_123456789' }, URLSearchParams, crypto: require('node:crypto'), fetch });
@@ -138,5 +138,30 @@ test('context API reports polling only for pending delivery on an enabled eligib
   let body;await module.exports({method:'GET',query:{ref:'opaque'}},{setHeader(){},status(){return this;},json(value){body=value;}});
   assert.equal(body.crmPending,pending);assert.equal(body.bookingEnabled,false);
   if(pending)assert.equal(body.reason,'contact_sync_pending');
+ }
+});
+
+test('newer canonical appointment changes discard old attempt and read context without another booking POST',async()=>{
+ for(const state of ['cancelled','showed','noshow']) {
+  const oldId=require('node:crypto').randomUUID();
+  const time=new Date(Date.now()+86400000).toISOString();
+  const r=await interactive({contexts:[null,{bookingId:oldId,startTime:time,timezone:'UTC',state,canRetry:false}],posts:[{ok:false,status:409,body:{ok:false,error:'appointment_changed'}},{ok:true,status:202,body:{ok:true,pending:true}}]});
+  await r.choose();await r.confirm();
+  const original=JSON.parse(r.calls.find(c=>c.url==='/api/bookings').config.body);
+  assert.equal(r.calls.filter(c=>c.url==='/api/bookings').length,1);
+  assert.equal(r.calls.filter(c=>c.url.startsWith('/api/booking-context')).length,2);
+  assert.notEqual(r.elements['#booking-heading'].textContent,'Your call is booked.');
+  if(state==='cancelled') {
+   assert.match(r.elements['#booking-heading'].textContent,/no longer booked/);
+   assert.equal(r.elements['#booking-picker'].hidden,false);
+   assert.equal(r.elements['#booking-timezone'].disabled,false);
+   await r.choose();await r.confirm();
+   const posts=r.calls.filter(c=>c.url==='/api/bookings');
+   assert.equal(posts.length,2);assert.notEqual(JSON.parse(posts[1].config.body).bookingId,original.bookingId);
+  } else {
+   assert.equal(r.elements['#booking-picker'].hidden,true);
+   assert.match(r.elements['#booking-detail'].textContent,/next step/);
+   await r.confirm();assert.equal(r.calls.filter(c=>c.url==='/api/bookings').length,1);
+  }
  }
 });

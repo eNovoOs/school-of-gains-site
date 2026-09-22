@@ -205,6 +205,18 @@ async function confirm() {
       showConfirmed(result.startTime);
       return;
     }
+    if (response.status === 409 && result.error === 'appointment_changed') {
+      // A newer canonical event won the race. Discard this attempt and read its state;
+      // only another explicit slot selection may create a new provider request.
+      awaitingVerification = false;
+      bookingAttempt = null;
+      selectedSlot = '';
+      selection.hidden = true;
+      picker.hidden = true;
+      loading = false;
+      await check();
+      return;
+    }
     if (response.status === 409 && ['slot_unavailable', 'choose_another_slot'].includes(result.error)) {
       awaitingVerification = false;
       bookingAttempt = null;

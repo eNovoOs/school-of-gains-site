@@ -53,6 +53,8 @@ SELECT jsonb_build_object(
  'failedDeliveries',(SELECT count(*)::int FROM sog_outbox WHERE status='failed'),
  'pendingSignals',(SELECT count(*)::int FROM sog_provider_signals WHERE status='pending'),
  'failedSignals',(SELECT count(*)::int FROM sog_provider_signals WHERE status='failed'),
+ 'pendingBookingRecoveries',(SELECT count(*)::int FROM sog_booking_intents WHERE state IN ('pending','uncertain') AND recovery_status='pending'),
+ 'reviewBookingRecoveries',(SELECT count(*)::int FROM sog_booking_intents WHERE state IN ('pending','uncertain') AND recovery_status='review'),
  'lastBookingEvent',(SELECT max(received_at) FROM sog_events WHERE type IN ('appointment_new','appointment_confirmed')))
 ) AS report`;
 module.exports = async (req,res) => {

@@ -31,6 +31,10 @@
       campaignReports(data);
       row($('pipeline'),'Open sales cycles',fmt(data.health.openCycles));
       row($('pipeline'),'Currently unbooked',fmt(data.health.unbookedCycles));
+      for (const [key,label] of [['pendingBookingRecoveries','Booking requests being checked'],['reviewBookingRecoveries','Booking requests needing review']]) {
+        const count=data.health[key];
+        row($('health'),label,Number.isInteger(count) && count>=0 ? fmt(count) : 'Unavailable');
+      }
       row($('health'),'Pending CRM deliveries',fmt(data.health.pendingDeliveries));
       row($('health'),'Failed CRM deliveries',fmt(data.health.failedDeliveries));
       row($('health'),'Pending provider signals',fmt(data.health.pendingSignals));
