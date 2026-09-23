@@ -1,9 +1,9 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {processOne,reconcileCycle,findTask,marker,dueHours}=require('../lib/sales-tasks');
+const {processOne,reconcileCycle,findTask,marker,dueHours,deadlineOrigin}=require('../lib/sales-tasks');
 const job={id:'e12c76a2-69cd-42fb-9d7a-7dd3b36ad255',cycle_id:'cycle',ghl_contact_id:'contact',ghl_opportunity_id:'opportunity',due_at:'2026-10-01T10:00:00Z',desired_state:'open',attempts:0,create_started_at:null,provider_task_id:null};
 const opportunity={id:'opportunity',contactId:'contact',locationId:'3mi3YQaZvtUMZzaQUuL6',pipelineId:'GxJOcIsgv7Svx90E2BZr',status:'open',pipelineStageId:'unbooked',assignedTo:'closer000001'};
-const cycle={id:'cycle',status:'open',stage:'unbooked',ghl_contact_id:'contact',ghl_opportunity_id:'opportunity',email:'media@revupcmo.com'};
+const cycle={id:'cycle',status:'open',stage:'unbooked',ghl_contact_id:'contact',ghl_opportunity_id:'opportunity',email:'media@revupcmo.com',created_at:'2026-09-30T10:00:00Z'};
 const task={id:'managed-task',contactId:'contact',body:marker(job),dueDate:job.due_at,completed:false,assignedTo:'closer000001'};
 function environment(t){
  const values={GHL_TASKS_ENABLED:'true',GHL_UNBOOKED_STAGE_ID:'unbooked',GHL_CLOSER_IDS:'closer000001,closer000002',ATTRIBUTION_PILOT_EMAILS:'media@revupcmo.com',GHL_TASK_DUE_HOURS:'24'};
@@ -27,9 +27,11 @@ test('disabled worker and reconciliation never touch storage',async t=>{
  assert.equal((await processOne({db:{}})).disabled,true);
  assert.equal((await reconcileCycle({},'x')).disabled,true);
 });
-test('task SLA must be explicitly configured',t=>{
+test('approved task SLA defaults to24hours and rejects a longer deadline',t=>{
  environment(t);delete process.env.GHL_TASK_DUE_HOURS;
- assert.throws(()=>dueHours(),/task_due_policy_missing/);
+ assert.equal(dueHours(),24);
+ process.env.GHL_TASK_DUE_HOURS='25';assert.throws(()=>dueHours(),/task_due_policy_missing/);
+ process.env.GHL_TASK_DUE_HOURS='';assert.throws(()=>dueHours(),/task_due_policy_missing/);
 });
 test('repeating an unbooked application retains episode and due date',async t=>{
  environment(t);const calls=[];
@@ -96,4 +98,49 @@ test('unknown opportunity owner holds for review before task mutation',async t=>
  environment(t);const s=storage();
  const result=await processOne({db:s.db,request:async(path,method='GET')=>{assert.equal(method,'GET');return path.startsWith('/opportunities')?{opportunity:{...opportunity,assignedTo:'unknown'}}:{tasks:[]};}});
  assert.equal(result.needsReview,true);
+});
+
+test('initial deadline uses cycle creation and new episodes use their own transition time',async t=>{
+ environment(t);let inserted;
+ await reconcileCycle({query:async(sql,args)=>{
+  if(sql.startsWith('SELECT sc.'))return {rows:[cycle]};
+  if(sql.startsWith('SELECT id'))return {rows:[]};
+  inserted={sql,args};return {rows:[{id:job.id}]};
+ }},cycle.id);
+ assert.equal(inserted.args[4],86400);assert.equal(inserted.args[5],cycle.created_at);
+ assert.match(inserted.sql,/CASE WHEN MAX\(episode\) IS NULL OR \$6::timestamptz>MAX\(created_at\) THEN LEAST\(now\(\),\$6::timestamptz\) ELSE now\(\) END/);
+});
+test('manual deal move to setter-booked stage closes task but never moves the deal',async t=>{
+ environment(t);const s=storage({provider_task_id:task.id});let completed=false;
+ const mutations=[];
+ const result=await processOne({db:s.db,request:async(path,method='GET',body)=>{
+  if(path.startsWith('/opportunities')){assert.equal(method,'GET');return {opportunity:{...opportunity,pipelineStageId:'setter-booked'}};}
+  if(method==='PUT'){mutations.push({path,body});completed=true;return {};}
+  return {task:{...task,completed}};
+ }});
+ assert.equal(result.processed,1);assert.deepEqual(mutations,[{path:'/contacts/contact/tasks/managed-task',body:{completed:true}}]);
+});
+test('incomplete provider stage data holds for review instead of completing the task',async t=>{
+ environment(t);const s=storage({provider_task_id:task.id});
+ const result=await processOne({db:s.db,request:async(path,method='GET')=>{
+  assert.equal(method,'GET');assert.match(path,/^\/opportunities/);
+  return {opportunity:{...opportunity,pipelineStageId:undefined}};
+ }});
+ assert.equal(result.needsReview,true);
+});
+
+test('booked-first cycle cancelled days later starts its first follow-up deadline at cancellation',async t=>{
+ environment(t);const cancelledAt='2026-10-04T12:30:00Z';let inserted;
+ const bookedFirst={...cycle,created_at:'2026-09-30T10:00:00Z',unbooked_returned_at:cancelledAt};
+ await reconcileCycle({query:async(sql,args)=>{
+  if(sql.startsWith('SELECT sc.'))return {rows:[bookedFirst]};
+  if(sql.startsWith('SELECT id'))return {rows:[]};
+  inserted={sql,args};return {rows:[{id:job.id}]};
+ }},cycle.id);
+ assert.equal(inserted.args[5],cancelledAt);assert.equal(inserted.args[4],86400);
+ assert.equal(new Date(Date.parse(inserted.args[5])+inserted.args[4]*1000).toISOString(),'2026-10-05T12:30:00.000Z');
+});
+test('initial application origin remains creation and predating cancellation cannot advance deadline',()=>{
+ assert.equal(deadlineOrigin(cycle),cycle.created_at);
+ assert.equal(deadlineOrigin({...cycle,unbooked_returned_at:'2026-09-01T00:00:00Z'}),cycle.created_at);
 });
