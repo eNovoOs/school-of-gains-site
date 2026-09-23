@@ -6,7 +6,7 @@ const {syncAppointment}=require('../lib/attribution-ghl');
 const {ATTR_FIELDS}=require('../lib/lead-ghl');
 const creation=require('../lib/opportunity-creation');
 const LOCATION='3mi3YQaZvtUMZzaQUuL6',CLOSERS='GxJOcIsgv7Svx90E2BZr';
-const stages={booked:'booked',booked_ads:'ads',unbooked:'unbooked',call_held:'held',follow_up:'follow',contacted_once:'once',won:'won'};
+const stages={booked:'booked',booked_ads:'ads',booked_setter:'setter',unbooked:'unbooked',call_held:'held',follow_up:'follow',contacted_once:'once',won:'won'};
 test('confirmed appointment without application creates a sales cycle and routing job, never quiz data',async()=>{
  const writes=[],contact={id:randomUUID(),ghl_contact_id:'contact',first_touch:{source:'meetup'},latest_touch:{source:'youtube'}};
  const c={query:async(sql,params)=>{writes.push({sql,params});if(sql.startsWith('SELECT * FROM sog_contacts'))return {rows:[contact]};if(sql.startsWith('INSERT INTO sog_sales_cycles'))return {rows:[{id:params[0],contact_id:contact.id,status:params[2],stage:params[3]}]};return {rows:[],rowCount:0};}};
@@ -23,17 +23,18 @@ test('negative appointment alone does not create a sales cycle',async()=>{
   assert.equal(queries.some(sql=>sql.startsWith('INSERT INTO sog_sales_cycles')),false);
  }
 });
-async function fixture({opportunities=[],reserve=true,contactOverride={},stage='booked',postError=false}={}){
+async function fixture({opportunities=[],reserve=true,contactOverride={},stage='booked',postError=false,knownDeal}={}){
  const env={...process.env},fetch=global.fetch,calls=[],writes=[],cycle={id:randomUUID(),contact_id:randomUUID(),status:'open',stage};
  Object.assign(process.env,{GHL_SYNC_ENABLED:'true',GHL_PRIVATE_INTEGRATION_TOKEN:'test',GHL_STAGE_IDS_JSON:JSON.stringify(stages),GHL_ATTRIBUTION_FIELDS_JSON:JSON.stringify(Object.fromEntries(ATTR_FIELDS.map(key=>[key,key])))});
  global.fetch=async(url,options)=>{
   const path=new URL(url).pathname;const data=options.body&&JSON.parse(options.body);calls.push({path,method:options.method,data});
   if(path==='/contacts/contact')return {ok:true,json:async()=>({contact:{id:'contact',locationId:LOCATION,email:'booking@example.invalid',...contactOverride}})};
+  if(knownDeal && path==='/opportunities/'+knownDeal.id)return {ok:true,json:async()=>({opportunity:knownDeal})};
   if(path==='/opportunities/search')return {ok:true,json:async()=>({opportunities})};
   if(options.method==='POST') {if(postError)throw new Error('timeout');return {ok:true,json:async()=>({opportunity:{id:'new-deal',locationId:LOCATION,contactId:'contact',pipelineId:CLOSERS,pipelineStageId:data.pipelineStageId,status:'open',assignedTo:data.assignedTo}})};}
   return {ok:true,json:async()=>({})};
  };
- const c={query:async(sql,params)=>{writes.push({sql,params});if(sql.startsWith('SELECT * FROM sog_sales_cycles'))return {rows:[cycle]};if(sql.startsWith('SELECT * FROM sog_contacts'))return {rows:[{id:cycle.contact_id,email:'booking@example.invalid',ghl_contact_id:'contact',first_touch:{source:'meetup'},latest_touch:{source:'google',medium:'cpc'}}]};if(sql.startsWith('SELECT booking_setter_id'))return {rows:[{attribution:{latestTouch:{medium:'cpc'}}}]};return {rows:[]};}};
+ const c={query:async(sql,params)=>{writes.push({sql,params});if(sql.startsWith('SELECT * FROM sog_sales_cycles'))return {rows:[cycle]};if(sql.startsWith('SELECT * FROM sog_contacts'))return {rows:[{id:cycle.contact_id,email:'booking@example.invalid',ghl_contact_id:'contact',first_touch:{source:'meetup'},latest_touch:{source:'google',medium:'cpc'}}]};if(sql.startsWith('SELECT ghl_opportunity_id FROM sog_lead_cycles'))return {rows:knownDeal?[{ghl_opportunity_id:knownDeal.id}]:[]};if(sql.startsWith('SELECT booking_setter_id'))return {rows:[{attribution:{latestTouch:{medium:'cpc'}}}]};return {rows:[]};}};
  try{await syncAppointment(c,{cycleId:cycle.id},{reserveCloser:async()=>{calls.push({method:'ALLOCATE'});return 'reserved-closer';},reserveCreation:async()=>reserve});return {calls,writes,cycle};}
  catch(error){error.calls=calls;throw error;}
  finally{global.fetch=fetch;for(const k of Object.keys(process.env))if(!(k in env))delete process.env[k];Object.assign(process.env,env);}
@@ -58,4 +59,25 @@ test('independent durable creation fence authorizes exactly one POST attempt and
  const id=randomUUID();let saved;
  const run=async fn=>fn({query:async(sql,params)=>{if(sql.startsWith('INSERT')){if(saved)return {rowCount:0};saved=params[1];return {rowCount:1};}return {rows:[{ghl_contact_id:saved}]};}});
  assert.equal(await creation.reserve(id,'contact',run),true);assert.equal(await creation.reserve(id,'contact',run),false);await assert.rejects(creation.reserve(id,'other',run),{message:'ghl_opportunity_creation_identity_invalid'});
+});
+
+test('booking waits for manual setter transfer then adopts the same moved deal with owner and BOF preserved',async()=>{
+ const setter={id:'manual-deal',contactId:'contact',pipelineId:'PSq0fv77HbtMg9bdKC2p',pipelineStageId:'setter-original-stage',status:'open',assignedTo:'sales-owner'};
+ await assert.rejects(fixture({opportunities:[setter]}),error=>{
+  assert.equal(error.message,'ghl_manual_setter_transfer_pending');
+  assert.equal(error.calls.some(call=>['POST','PUT','ALLOCATE'].includes(call.method)),false);return true;
+ });
+ const moved={...setter,pipelineId:CLOSERS,pipelineStageId:'setter'};
+ const result=await fixture({opportunities:[moved]});
+ assert.equal(result.cycle.ghl_opportunity_id,setter.id);
+ assert.equal(result.writes.find(write=>write.sql.includes('assigned_closer_id')).params[2],'sales-owner');
+ assert.equal(result.calls.some(call=>['POST','PUT','ALLOCATE'].includes(call.method)),false);
+});
+test('known setter deal exact read blocks duplicate creation during search lag and adopts completed manual move',async()=>{
+ const setter={id:'known-deal',contactId:'contact',pipelineId:'PSq0fv77HbtMg9bdKC2p',pipelineStageId:'original',status:'open',assignedTo:'retained'};
+ await assert.rejects(fixture({knownDeal:setter}),error=>{
+  assert.equal(error.message,'ghl_manual_setter_transfer_pending');assert.equal(error.calls.some(call=>call.method==='POST'),false);return true;
+ });
+ const result=await fixture({knownDeal:{...setter,pipelineId:CLOSERS,pipelineStageId:'setter'}});
+ assert.equal(result.cycle.ghl_opportunity_id,'known-deal');assert.equal(result.calls.some(call=>['POST','PUT','ALLOCATE'].includes(call.method)),false);
 });

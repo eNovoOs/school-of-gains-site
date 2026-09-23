@@ -32,6 +32,26 @@
     {
       "path": "/api/webhooks/recover-bookings",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/webhooks/process-leads",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/webhooks/process-tasks",
+      "schedule": "* * * * *"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/linktree-mads",
+      "destination": "/links?legacy_route=legacy_001&route_map_version=v1",
+      "statusCode": 302
+    },
+    {
+      "source": "/special-offer-dc",
+      "destination": "/apply?legacy_route=legacy_033&route_map_version=v1",
+      "statusCode": 302
     }
   ]
 }

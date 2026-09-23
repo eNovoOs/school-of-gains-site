@@ -34,3 +34,13 @@ test('native lead signals enable lead counts without web intake and query signal
  assert.deepEqual(report.leadSignals,{enabled:true,pending:4,failed:1});
  assert.deepEqual(report.tasks,{enabled:false});
 });
+
+test('lead routing reviews count current cycles independently of delivery success and selected capture window',async()=>{
+ const report=await routingReport(async sql=>{
+  assert.equal(sql,LEAD_SQL);
+  assert.match(sql,/'reviewCycles',\(SELECT count\(\*\)::int FROM sog_lead_cycles WHERE status='review'\)/);
+  return {rows:[{report:{distinctContacts:0,captures:0,pendingDeliveries:0,failedDeliveries:0,reviewCycles:3}}]};
+ },['2026-10-01','2026-11-01'],{LEAD_INTAKE_ENABLED:'true'});
+ assert.equal(report.leads.reviewCycles,3);assert.equal(report.leads.failedDeliveries,0);assert.equal(report.leads.captures,0);
+ await assert.rejects(routingReport(async()=>{throw new Error('lead review table unavailable');},[],{LEAD_INTAKE_ENABLED:'true'}),/lead review table unavailable/);
+});

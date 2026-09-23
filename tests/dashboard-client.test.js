@@ -62,7 +62,7 @@ test('lead captures remain separate from applications and task queues render in 
  const b=await dashboard({...baseline(),routing:{leads:{enabled:true,distinctContacts:3,captures:5,pendingDeliveries:2,failedDeliveries:1},tasks:{enabled:true,pending:4,review:2}}});
  assert.deepEqual(b.get('leads').children.map(r=>r.children.map(c=>c.textContent)),[['Distinct lead contacts','3'],['Lead capture submissions','5']]);
  assert.equal(b.get('metrics').children[1].children[1].textContent,'2');
- assert.deepEqual(b.get('health').children.slice(-5).filter(r=>r.children[0].textContent!=='GHL lead signal reporting').map(r=>r.children.map(c=>c.textContent)),[['Pending lead CRM deliveries','2'],['Failed lead CRM deliveries','1'],['Managed tasks awaiting sync','4'],['Managed tasks needing review','2']]);
+ assert.deepEqual(b.get('health').children.filter(r=>['Pending lead CRM deliveries','Failed lead CRM deliveries','Managed tasks awaiting sync','Managed tasks needing review'].includes(r.children[0].textContent)).map(r=>r.children.map(c=>c.textContent)),[['Pending lead CRM deliveries','2'],['Failed lead CRM deliveries','1'],['Managed tasks awaiting sync','4'],['Managed tasks needing review','2']]);
  await b.logout();assert.equal(b.get('leads').children.length,0);
 });
 test('disabled or missing lead/task counts are never rendered as zero',async()=>{
@@ -83,4 +83,16 @@ test('native lead signal queue is separate and disabled/missing signal reporting
  b.setData({...baseline(),routing:{leadSignals:{enabled:false}}});await b.refresh();
  assert.deepEqual(signalRows()[0].children.map(c=>c.textContent),['GHL lead signal reporting','Not enabled']);
  b.setData(baseline());await b.refresh();assert.equal(signalRows()[0].children[1].textContent,'Unavailable');
+});
+
+test('lead routing reviews remain visible despite successful delivery and distinguish zero/disabled/unavailable',async()=>{
+ const report=reviewCycles=>({...baseline(),routing:{leads:{enabled:true,distinctContacts:1,captures:1,pendingDeliveries:0,failedDeliveries:0,reviewCycles}}});
+ const b=await dashboard(report(2));
+ const health=label=>b.get('health').children.find(r=>r.children[0]?.textContent===label)?.children[1].textContent;
+ assert.equal(health('Failed lead CRM deliveries'),'0');assert.equal(health('Pending lead CRM deliveries'),'0');assert.equal(health('Lead deals needing routing review'),'2');
+ b.setData(report(0));await b.refresh();assert.equal(health('Lead deals needing routing review'),'0');
+ for(const value of [undefined,null,-1,'2']){b.setData(report(value));await b.refresh();assert.equal(health('Lead deals needing routing review'),'Unavailable');}
+ b.setData({...baseline(),routing:{leads:{enabled:false}}});await b.refresh();assert.equal(health('Lead routing review reporting'),'Not enabled');assert.equal(health('Lead deals needing routing review'),undefined);
+ b.setData(baseline());await b.refresh();assert.equal(health('Lead routing review reporting'),'Unavailable');
+ b.setData(report(2));await b.refresh();await b.logout();assert.equal(b.get('health').children.length,0);
 });

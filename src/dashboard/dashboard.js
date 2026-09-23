@@ -28,7 +28,11 @@
       row($('leads'),'Lead capture submissions',count(leads.captures));
       row($('health'),'Pending lead CRM deliveries',count(leads.pendingDeliveries));
       row($('health'),'Failed lead CRM deliveries',count(leads.failedDeliveries));
-    }else $('leads').append(node('p',leads?.enabled===false?'Lead intake reporting is not enabled.':'Lead intake reporting unavailable.'));
+      row($('health'),'Lead deals needing routing review',count(leads.reviewCycles));
+    }else {
+      $('leads').append(node('p',leads?.enabled===false?'Lead intake reporting is not enabled.':'Lead intake reporting unavailable.'));
+      row($('health'),'Lead routing review reporting',leads?.enabled===false?'Not enabled':'Unavailable');
+    }
     if(signals?.enabled===true){
       row($('health'),'Pending GHL lead signals',count(signals.pending));
       row($('health'),'Failed GHL lead signals',count(signals.failed));

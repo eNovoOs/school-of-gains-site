@@ -56,7 +56,7 @@
     return Object.assign(result, evidence(input));
   }
   function nonDirect(touch) {
-    return !!(touch.utm_source || touch.gclid || touch.gbraid || touch.wbraid || touch.fbclid || touch.ttclid || touch.referrer);
+    return !!((touch.legacy_route === 'legacy_001' && touch.route_map_version === 'v1') || touch.utm_source || touch.gclid || touch.gbraid || touch.wbraid || touch.fbclid || touch.ttclid || touch.referrer);
   }
   var current = { captured_at: new Date(now).toISOString(), landing_page: window.location.origin + safePath(window.location.pathname), referrer: safeReferrer(window.document.referrer) };
   var internal = false;
