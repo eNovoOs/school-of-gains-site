@@ -57,3 +57,30 @@ test('booking recovery health remains separate from confirmed bookings and missi
  b.setData({...baseline(),health:{pendingBookingRecoveries:4,reviewBookingRecoveries:2}});await b.refresh();
  await b.logout();assert.equal(b.get('health').children.length,0);
 });
+
+test('lead captures remain separate from applications and task queues render in health',async()=>{
+ const b=await dashboard({...baseline(),routing:{leads:{enabled:true,distinctContacts:3,captures:5,pendingDeliveries:2,failedDeliveries:1},tasks:{enabled:true,pending:4,review:2}}});
+ assert.deepEqual(b.get('leads').children.map(r=>r.children.map(c=>c.textContent)),[['Distinct lead contacts','3'],['Lead capture submissions','5']]);
+ assert.equal(b.get('metrics').children[1].children[1].textContent,'2');
+ assert.deepEqual(b.get('health').children.slice(-5).filter(r=>r.children[0].textContent!=='GHL lead signal reporting').map(r=>r.children.map(c=>c.textContent)),[['Pending lead CRM deliveries','2'],['Failed lead CRM deliveries','1'],['Managed tasks awaiting sync','4'],['Managed tasks needing review','2']]);
+ await b.logout();assert.equal(b.get('leads').children.length,0);
+});
+test('disabled or missing lead/task counts are never rendered as zero',async()=>{
+ const b=await dashboard({...baseline(),routing:{leads:{enabled:false},tasks:{enabled:false}}});
+ assert.equal(b.get('leads').children[0].textContent,'Lead intake reporting is not enabled.');
+ assert.equal(b.get('health').children.at(-1).children[1].textContent,'Not enabled');
+ b.setData({...baseline(),routing:{leads:{enabled:true,captures:0},tasks:{enabled:true,pending:-1,review:'2'}}});await b.refresh();
+ assert.equal(b.get('leads').children[0].children[1].textContent,'Unavailable');
+ assert.equal(b.get('leads').children[1].children[1].textContent,'0');
+ assert.deepEqual(b.get('health').children.slice(-2).map(r=>r.children[1].textContent),['Unavailable','Unavailable']);
+ b.setData(null);await b.refresh();assert.equal(b.get('leads').children.length,0);
+});
+
+test('native lead signal queue is separate and disabled/missing signal reporting has no zero counts',async()=>{
+ const b=await dashboard({...baseline(),routing:{leadSignals:{enabled:true,pending:3,failed:1}}});
+ const signalRows=()=>b.get('health').children.filter(r=>r.children[0]?.textContent.includes('GHL lead'));
+ assert.deepEqual(signalRows().map(r=>r.children.map(c=>c.textContent)),[['Pending GHL lead signals','3'],['Failed GHL lead signals','1']]);
+ b.setData({...baseline(),routing:{leadSignals:{enabled:false}}});await b.refresh();
+ assert.deepEqual(signalRows()[0].children.map(c=>c.textContent),['GHL lead signal reporting','Not enabled']);
+ b.setData(baseline());await b.refresh();assert.equal(signalRows()[0].children[1].textContent,'Unavailable');
+});

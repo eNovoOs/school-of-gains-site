@@ -88,3 +88,5 @@ h1 .g { color: var(--green); }
   .progress .st { width: 90px; }
   .progress .line { width: 28px; }
 }
+
+.consent-choice{display:block;text-align:left;font-size:12px;line-height:1.6;color:var(--muted);margin:12px 0}.consent-choice input{accent-color:var(--green);margin-right:6px}.consent-choice a{text-decoration:underline}

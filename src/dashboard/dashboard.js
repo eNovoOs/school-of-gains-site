@@ -5,7 +5,7 @@
   function loggedIn(value) { $('login').hidden=value; $('report').hidden=!value; $('logout').hidden=!value; }
   async function request(path,options={}) { const r = await fetch('/api/dashboard/'+path,{credentials:'same-origin',...options}); const data=await r.json().catch(()=>({})); if(!r.ok) { const error=new Error(data.error || 'request_failed'); error.status=r.status; throw error; } return data; }
   function row(parent,label,value) { const el=node('div','');el.className='row';el.append(node('span',label),node('b',value));parent.append(el); }
-  function clearReport() { for (const id of ['metrics','channels','campaigns','outcomes','health','pipeline']) $(id).replaceChildren(); }
+  function clearReport() { for (const id of ['metrics','channels','campaigns','outcomes','health','pipeline','leads']) $(id).replaceChildren(); }
   function emptyTable(parent, text, columns) { const tr=node('tr','');const td=node('td',text);td.colSpan=columns;tr.append(td);parent.append(tr); }
   function campaignReports(data) {
     if (!Array.isArray(data.campaigns)) emptyTable($('campaigns'),'Campaign reporting unavailable.',6);
@@ -19,6 +19,24 @@
     if (!data.outcomes || !categories.every(([key])=>Number.isFinite(data.outcomes[key]) && data.outcomes[key]>=0)) {
       $('outcomes').append(node('p','Booking outcomes unavailable.'));
     } else for (const [key,label] of categories) row($('outcomes'),label,fmt(data.outcomes[key]));
+  }
+  function routingReports(data) {
+    const count=value=>Number.isInteger(value) && value>=0?fmt(value):'Unavailable';
+    const leads=data.routing?.leads,tasks=data.routing?.tasks,signals=data.routing?.leadSignals;
+    if(leads?.enabled===true){
+      row($('leads'),'Distinct lead contacts',count(leads.distinctContacts));
+      row($('leads'),'Lead capture submissions',count(leads.captures));
+      row($('health'),'Pending lead CRM deliveries',count(leads.pendingDeliveries));
+      row($('health'),'Failed lead CRM deliveries',count(leads.failedDeliveries));
+    }else $('leads').append(node('p',leads?.enabled===false?'Lead intake reporting is not enabled.':'Lead intake reporting unavailable.'));
+    if(signals?.enabled===true){
+      row($('health'),'Pending GHL lead signals',count(signals.pending));
+      row($('health'),'Failed GHL lead signals',count(signals.failed));
+    }else row($('health'),'GHL lead signal reporting',signals?.enabled===false?'Not enabled':'Unavailable');
+    if(tasks?.enabled===true){
+      row($('health'),'Managed tasks awaiting sync',count(tasks.pending));
+      row($('health'),'Managed tasks needing review',count(tasks.review));
+    }else row($('health'),'Managed task reporting',tasks?.enabled===false?'Not enabled':'Unavailable');
   }
   async function refresh() {
     $('status').textContent='Loading recorded activity…';
@@ -41,6 +59,7 @@
       row($('health'),'Signals requiring review',fmt(data.health.failedSignals));
       row($('health'),'Applications without source',fmt(data.summary.applications-data.summary.attributedApplications));
       row($('health'),'Last verified booking event',data.health.lastBookingEvent ? new Date(data.health.lastBookingEvent).toLocaleString() : 'None recorded');
+      routingReports(data);
       $('status').textContent='Updated '+new Date(data.generatedAt).toLocaleString()+'. Window: '+data.window.start.slice(0,10)+' to '+data.window.end.slice(0,10)+' UTC.';
     } catch(error) { if(error.status===401) loggedIn(false); $('status').textContent='Reporting unavailable. No metrics have been substituted. Check the database and tracking configuration.'; }
   }

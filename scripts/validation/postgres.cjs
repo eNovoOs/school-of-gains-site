@@ -31,21 +31,26 @@ async function run(argv=process.argv.slice(2),env=process.env) {
     assert.match(config.schema,/^sog_test_[0-9a-f]{32}$/);
     await admin.query('CREATE SCHEMA "'+config.schema+'"');created=true;
     process.env.DATABASE_URL=config.isolatedUrl;
-    process.env.GHL_SYNC_ENABLED='false';process.env.GHL_BOOKING_ENABLED='false';
+    process.env.GHL_TASKS_ENABLED='false';process.env.GHL_SYNC_ENABLED='false';process.env.GHL_BOOKING_ENABLED='false';
     delete process.env.GHL_PRIVATE_INTEGRATION_TOKEN;
     global.fetch=async()=>{throw new Error('External HTTP is prohibited during database validation');};
     db=require('../../lib/attribution-db');
     allocation=require('../../lib/attribution-assignment');
     assert.equal((await db.query('SELECT current_schema() AS name')).rows[0].name,config.schema,'Runtime pool is not isolated');
     migrationConnection=await db.getPool().connect();
-    for(let pass=0;pass<2;pass++)for(const file of ['001-attribution.sql','002-booking.sql','003-closer-rotation.sql','004-provider-signals.sql','005-booking-recovery.sql']) {
+    for(let pass=0;pass<2;pass++)for(const file of ['001-attribution.sql','002-booking.sql','003-closer-rotation.sql','004-provider-signals.sql','005-booking-recovery.sql','006-lead-intake.sql','007-sales-tasks.sql']) {
       assert.equal((await migrationConnection.query('SELECT current_schema() AS name')).rows[0].name,config.schema);
       await migrationConnection.query(await fs.readFile(path.join(__dirname,'../../db',file),'utf8'));
     }
     migrationConnection.release();migrationConnection=null;
     const {rows:tables}=await db.query('SELECT table_name FROM information_schema.tables WHERE table_schema=$1',[config.schema]);
-    assert.equal(tables.length,12);
-    check('migrations 001–005 apply and reapply inside disposable schema');
+    assert.equal(tables.length,17);
+    check('migrations 001–007 apply and reapply inside disposable schema');
+    if(argv.includes('--routing-only')) {
+      await require('./lead-routing-fixture.cjs')(db);
+      check('lead intake concurrency, canonical contact reuse and task episode lifecycle');
+      return;
+    }
     if(argv.includes('--recovery-only')) {
       await require('./booking-recovery-fixture.cjs')(db);
       check('recovery concurrency, lease fencing, moved booking and cancellation persist atomically');

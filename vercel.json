@@ -4,13 +4,34 @@
   "framework": null,
   "cleanUrls": true,
   "functions": {
-    "api/webhooks/process.js": { "maxDuration": 120 },
-    "api/webhooks/process-signals.js": { "maxDuration": 120 },
-    "api/webhooks/recover-bookings.js": { "maxDuration": 120 }
+    "api/webhooks/process.js": {
+      "maxDuration": 120
+    },
+    "api/webhooks/process-signals.js": {
+      "maxDuration": 120
+    },
+    "api/webhooks/recover-bookings.js": {
+      "maxDuration": 120
+    },
+    "api/webhooks/process-leads.js": {
+      "maxDuration": 120
+    },
+    "api/webhooks/process-tasks.js": {
+      "maxDuration": 120
+    }
   },
   "crons": [
-    { "path": "/api/webhooks/process-signals", "schedule": "* * * * *" },
-    { "path": "/api/webhooks/process", "schedule": "* * * * *" },
-    { "path": "/api/webhooks/recover-bookings", "schedule": "* * * * *" }
+    {
+      "path": "/api/webhooks/process-signals",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/webhooks/process",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/webhooks/recover-bookings",
+      "schedule": "* * * * *"
+    }
   ]
 }
