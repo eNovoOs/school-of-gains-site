@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const {signal,normalize,enqueue,processOne}=require('../lib/lead-capture-signal');
+const {signal,normalize,enqueue,processOne,remoteAttribution}=require('../lib/lead-capture-signal');
 const LOCATION='3mi3YQaZvtUMZzaQUuL6';
 const env={GHL_LEAD_CAPTURE_ROUTES_JSON:JSON.stringify({'community-v1':'community','lessons-v1':'free_lessons'}),ATTRIBUTION_PILOT_EMAILS:'media@revupcmo.com',GHL_ATTRIBUTION_FIELDS_JSON:JSON.stringify({first_touch_snapshot:'first',latest_touch_snapshot:'latest'})};
 const raw={locationId:LOCATION,contactId:'contact-1',captureKey:'community-v1'};
@@ -31,4 +31,24 @@ test('worker commits lease before provider readback and saves lead before acknow
 test('identity mismatch never saves a lead and becomes visible failed inbox item',async()=>{
  let saved=false,last;const storage={transaction:fn=>fn({query:async sql=>({rows:sql.startsWith('SELECT')?[{id:'receipt',ghl_contact_id:'contact-1',capture_key:'community-v1',offer:'community',attempts:0}]:[]})}),query:async(sql,params)=>{last=params;return {rowCount:1};}};
  const result=await processOne({db:storage,env,read:async()=>({contact:{...contact,locationId:'wrong'}}),saveLead:async()=>{saved=true;}});assert.equal(saved,false);assert.equal(result.needsReview,true);assert.equal(last[2],true);
+});
+
+test('native first/latest attribution retains UTMs separately and does not confuse session channel with source',()=>{
+ const result=remoteAttribution({attributionSource:{utmSource:'google',utmMedium:'cpc',campaign:'first-campaign',utmContent:'ad-a',utmKeyword:'learn',url:'https://school-of-gains.com/links?gclid=first-click&email=private',sessionSource:'Paid Search',clickId:'ambiguous-click',campaignId:'native-campaign-id'},lastAttributionSource:{utmSource:'youtube',utmMedium:'organic_social',utmCampaign:'latest-campaign',utmContent:'video'}},env);
+ assert.equal(result.firstTouch.source,'google');assert.equal(result.firstTouch.utm_campaign,'first-campaign');assert.equal(result.firstTouch.utm_term,'learn');assert.equal(result.firstTouch.gclid,'first-click');assert.equal(result.firstTouch.ghl_clickId,'ambiguous-click');assert.equal(result.firstTouch.ghl_campaignId,'native-campaign-id');assert.equal(result.firstTouch.utm_id,undefined);assert.equal(result.firstTouch.landing_page,'https://school-of-gains.com/links');assert.equal(JSON.stringify(result).includes('private'),false);assert.equal(result.firstTouch.ghl_sessionSource,'Paid Search');assert.equal(result.latestTouch.source,'youtube');assert.equal(result.latestTouch.utm_campaign,'latest-campaign');assert.equal(result.latestTouch.gclid,undefined);assert.equal(result.latestTouch.timestamp_basis,'provider_readback');
+});
+test('SOG snapshots take precedence over native attribution without mixed campaign data',()=>{
+ const result=remoteAttribution({...contact,attributionSource:{utmSource:'facebook',utmMedium:'paid_social',campaign:'native-conflict'},lastAttributionSource:{utmSource:'google',utmMedium:'cpc'}},env);
+ assert.equal(result.firstTouch.source,'meetup');assert.equal(result.firstTouch.utm_campaign,undefined);assert.equal(result.latestTouch.source,'youtube');assert.equal(result.firstTouch.attribution_origin,'sog_snapshot');
+});
+test('native URL UTMs can fill missing fields; generic contact source and channel alone never fabricate platform',()=>{
+ const result=remoteAttribution({source:'Facebook form',attributionSource:{sessionSource:'Paid Social',clickId:'untyped'},lastAttributionSource:{url:'https://school-of-gains.com/?utm_source=instagram&utm_medium=organic_social&utm_campaign=profile',utmSource:'youtube'}},env);
+ assert.equal(result.firstTouch.source,'unknown');assert.equal(result.firstTouch.medium,'unknown');assert.equal(result.firstTouch.gclid,undefined);assert.equal(result.firstTouch.fbclid,undefined);assert.equal(result.latestTouch.source,'youtube');assert.equal(result.latestTouch.medium,'organic_social');assert.equal(result.latestTouch.utm_campaign,'profile');
+ const absent=remoteAttribution({source:'Direct'},env);assert.equal(absent.firstTouch.source,'unknown');assert.equal(absent.latestTouch.source,'unknown');
+});
+test('malformed or empty SOG snapshots fall back to native; mapped existing SOG fields keep precedence',()=>{
+ assert.equal(remoteAttribution({customFields:[{id:'first',value:'bad json'}],attributionSource:{utmSource:'meetup',utmMedium:'offline'}},env).firstTouch.source,'meetup');
+ const mapped={...env,GHL_ATTRIBUTION_FIELDS_JSON:JSON.stringify({first_source:'existing-source',first_campaign:'existing-campaign'})};
+ const result=remoteAttribution({customFields:[{id:'existing-source',value:'discord'},{id:'existing-campaign',value:'community'}],attributionSource:{utmSource:'google',utmMedium:'cpc'}},mapped);
+ assert.equal(result.firstTouch.source,'discord');assert.equal(result.firstTouch.medium,'unknown');assert.equal(result.firstTouch.utm_campaign,'community');
 });

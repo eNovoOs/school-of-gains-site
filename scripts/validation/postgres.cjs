@@ -38,15 +38,16 @@ async function run(argv=process.argv.slice(2),env=process.env) {
     allocation=require('../../lib/attribution-assignment');
     assert.equal((await db.query('SELECT current_schema() AS name')).rows[0].name,config.schema,'Runtime pool is not isolated');
     migrationConnection=await db.getPool().connect();
-    for(let pass=0;pass<2;pass++)for(const file of ['001-attribution.sql','002-booking.sql','003-closer-rotation.sql','004-provider-signals.sql','005-booking-recovery.sql','006-lead-intake.sql','007-sales-tasks.sql']) {
+    for(let pass=0;pass<2;pass++)for(const file of ['001-attribution.sql','002-booking.sql','003-closer-rotation.sql','004-provider-signals.sql','005-booking-recovery.sql','006-lead-intake.sql','007-sales-tasks.sql','008-opportunity-creation.sql']) {
       assert.equal((await migrationConnection.query('SELECT current_schema() AS name')).rows[0].name,config.schema);
       await migrationConnection.query(await fs.readFile(path.join(__dirname,'../../db',file),'utf8'));
     }
     migrationConnection.release();migrationConnection=null;
     const {rows:tables}=await db.query('SELECT table_name FROM information_schema.tables WHERE table_schema=$1',[config.schema]);
-    assert.equal(tables.length,17);
-    check('migrations 001–007 apply and reapply inside disposable schema');
+    assert.equal(tables.length,18);
+    check('migrations 001–008 apply and reapply inside disposable schema');
     if(argv.includes('--routing-only')) {
+      for(const name of await require('./booking-cycle-fixture.cjs')(db))check(name);
       await require('./lead-routing-fixture.cjs')(db);
       check('lead intake concurrency, canonical contact reuse and task episode lifecycle');
       return;
@@ -139,6 +140,7 @@ async function run(argv=process.argv.slice(2),env=process.env) {
   } finally {
     if(migrationConnection){await migrationConnection.query('ROLLBACK').catch(()=>{});migrationConnection.release();}
     if(allocation)await allocation.closeAllocationPool();
+    await require('../../lib/opportunity-creation').close();
     if(db)await db.getPool().end();
     try{if(created)await admin.query('DROP SCHEMA "'+config.schema+'" CASCADE');}finally{await admin.end();global.fetch=originalFetch;for(const key of Object.keys(process.env))if(!(key in originalEnv))delete process.env[key];Object.assign(process.env,originalEnv);}
   }
