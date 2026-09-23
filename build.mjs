@@ -124,7 +124,7 @@ function globalAttribution(html) {
   const oldAt=html.indexOf(old);
   if(oldAt<0) throw new Error('Expected legacy attribution include missing');
   const inHead=html.indexOf('</head>')>oldAt;
-  return html.replace(old,'<link rel="stylesheet" href="/acquisition/consent.css">\n<script src="/acquisition/attribution.js"'+(inHead?' defer':'')+'></script>');
+  return html.replace('</head>', '<link rel="stylesheet" href="/assets/main-site.css"></head>').replace(old,'<link rel="stylesheet" href="/acquisition/consent.css">\n<script src="/acquisition/attribution.js"'+(inHead?' defer':'')+'></script>');
 }
 // All frozen sources are verified before replacing generated output.
 await rm('public',{recursive:true,force:true});

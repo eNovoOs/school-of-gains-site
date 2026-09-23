@@ -6,6 +6,10 @@ Versioned legacy pages plus native acquisition pages and server-side attribution
 
 See [frozen-source instructions](src/legacy/README.md) for deliberate refresh and rollback, [live change register](docs/migration/live-change-register.md) for external mutations, and [verification report](docs/migration/integrated-verification-report.md) for tested behavior and remaining launch gates. Server configuration names are listed in `.env.attribution.example`; credentials must remain in the runtime environment, never browser bundles or Git. The new intake and GHL synchronization stay disabled until configured and verified.
 
+## Main website branding
+
+`assets/main-site.css` supplies shared typography, colors, buttons and responsive adjustments to the generated main website and Discord signup pages. `assets/brand.js` keeps header/footer artwork consistent after legacy hydration; `assets/brand.css` controls logo sizing. Edit these shared files instead of frozen page snapshots.
+
 ## Deploy settings
 
 - Build command: `node build.mjs`

@@ -1,0 +1,45 @@
+/* Shared presentation for the main website and Discord onboarding.
+   Loaded into generated pages; frozen source and embedded forms remain intact. */
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&display=swap');
+:root {
+  --bg: #000;
+  --bg-card: #141414;
+  --bg-card-hover: #1a1a1a;
+  --bg-elevated: #1f1f1f;
+  --card: #141414;
+  --card-2: #1f1f1f;
+  --border: #2a2a2a;
+  --green: #00a83e;
+  --green-bright: #00c948;
+  --green-dark: #00a83e;
+  --green-dim: rgba(0,168,62,.15);
+  --text: #fff;
+  --white: #fff;
+  --muted: #b0b0b0;
+  --gray-light: #b0b0b0;
+  --gray: #808080;
+}
+html body { background:#000; color:#fff; font-family:'Nunito Sans',sans-serif; }
+h1,h2,h3,h4 { font-family:'Sora',sans-serif; font-weight:800; }
+.nav, .footer { font-family:'Nunito Sans',sans-serif; }
+.btn { font-family:'Sora',sans-serif; font-weight:800; border-radius:50px; }
+.btn-primary, .btn-green { background:linear-gradient(135deg,#00a83e,#00c948); color:#000; }
+.btn-primary:hover, .btn-green:hover { background:linear-gradient(135deg,#00c948,#00e050); box-shadow:0 0 30px rgba(0,201,72,.2); }
+.btn:focus-visible, .nav a:focus-visible, .footer a:focus-visible { outline:2px solid #00c948; outline-offset:5px; }
+/* Join pages use the same typography and surfaces as the acquisition pages. */
+body:has(> .wrap) .wrap { background:radial-gradient(ellipse at 50% 0%,rgba(0,168,62,.09),transparent 65%); }
+body:has(> .wrap) .card { border-radius:20px; }
+body:has(> .wrap) .btn { text-transform:uppercase; letter-spacing:.04em; }
+body:has(> .wrap) .field input { min-width:0; }
+@media(max-width:680px) {
+  .nav .container:has(.sog-brand) { gap:12px; flex-wrap:wrap; }
+  .nav .container:has(.sog-brand) > .btn { padding:12px 18px; font-size:11px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .btn { transition:none!important; }
+  .btn:hover { transform:none!important; }
+}
+/* Reserve breathing room beneath the fixed homepage navigation. */
+.hero:has(#heroTitle) { padding-top:140px!important; }
+#sog-header { background:#000!important; }
+#sog-header .sog-brand { height:64px; }

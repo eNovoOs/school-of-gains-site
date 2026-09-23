@@ -1,7 +1,7 @@
 // Keep the supplied artwork after the mirrored site's runtime hydrates.
 (() => {
   function updateBrand() {
-    document.querySelectorAll('.nav-logo, .footer-logo, .nav .brand').forEach(brand => {
+    document.querySelectorAll('.nav-logo, .footer-logo, .nav .brand, #sog-header a:has(> img), nav a:has(> img[src="/logo.png"]), nav a:has(> img.sog-logo)').forEach(brand => {
       if (brand.querySelector('.sog-logo')?.getAttribute('src') === '/assets/sog-logo-horizontal.png') return;
       if (!brand.querySelector('img')) return;
       const image = document.createElement('img');
