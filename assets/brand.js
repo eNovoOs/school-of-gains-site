@@ -1,33 +1,17 @@
-// Reapply after the mirrored site's runtime hydrates its original markup.
+// Keep the supplied artwork after the mirrored site's runtime hydrates.
 (() => {
-  const containers = '.nav-logo, .footer-logo, .nav .brand';
   function updateBrand() {
-    document.querySelectorAll(containers).forEach(brand => {
-      const image = brand.querySelector('img');
-      if (!image) return;
+    document.querySelectorAll('.nav-logo, .footer-logo, .nav .brand').forEach(brand => {
+      if (brand.querySelector('.sog-logo')?.getAttribute('src') === '/assets/sog-logo-horizontal.png') return;
+      if (!brand.querySelector('img')) return;
+      const image = document.createElement('img');
+      image.className = 'sog-logo';
+      image.src = '/assets/sog-logo-horizontal.png';
+      image.alt = 'School of Gains — Presented by PaperGains';
       brand.classList.add('sog-brand');
-      if (!image.closest('.sog-cap')) {
-        const cap = document.createElement('span');
-        cap.className = 'sog-cap';
-        cap.setAttribute('aria-hidden', 'true');
-        image.before(cap);
-        cap.append(image);
-        image.alt = '';
-      }
-      if (image.getAttribute('src') !== '/logo.png') image.src = '/logo.png';
-      image.removeAttribute('srcset');
-      let wordmark = brand.querySelector('.logo-wordmark, .footer-wordmark, .sog-wordmark');
-      if (!wordmark) wordmark = [...brand.children].find(el => el.tagName === 'SPAN' && !el.classList.contains('sog-cap'));
-      if (!wordmark) {
-        wordmark = document.createElement('span');
-        brand.append(wordmark);
-      }
-      if (!wordmark.classList.contains('sog-wordmark')) {
-        wordmark.classList.add('sog-wordmark');
-        wordmark.innerHTML = 'School of <span class="green">Gains</span>';
-      }
+      brand.replaceChildren(image);
     });
   }
   updateBrand();
-  new MutationObserver(updateBrand).observe(document.documentElement, { childList: true, subtree: true });
+  new MutationObserver(updateBrand).observe(document.documentElement, {childList:true,subtree:true});
 })();
