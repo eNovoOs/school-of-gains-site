@@ -126,10 +126,22 @@ function globalAttribution(html) {
   const inHead=html.indexOf('</head>')>oldAt;
   return html.replace('</head>', '<link rel="stylesheet" href="/assets/main-site.css"></head>').replace(old,'<link rel="stylesheet" href="/acquisition/consent.css">\n<script src="/acquisition/attribution.js"'+(inHead?' defer':'')+'></script>');
 }
+// Remove the retired GHL chat loader from both rendered HTML and the
+// serialized hydration copy, so the legacy runtime cannot restore it.
+function removeChatWidget(html) {
+  const tags = html.match(/<script\b[^>]*\bsrc="https:\/\/widgets\.leadconnectorhq\.com\/loader\.js"[^>]*>\s*<\/script>/g) || [];
+  for (const tag of tags) {
+    const serialized = tag.replace(/</g, '\\u003C').replace(/\//g, '\\u002F').replace(/"/g, '\\"');
+    html = html.replaceAll(tag, '').replaceAll(serialized, '');
+  }
+  if (html.includes('widgets.leadconnectorhq.com')) throw new Error('Unrecognized chat loader remains in generated HTML');
+  return html;
+}
+
 // All frozen sources are verified before replacing generated output.
 await rm('public',{recursive:true,force:true});
 await mkdir('public',{recursive:true});
-for(const [file,html] of frozen) await writeFile(path.join('public',file),globalAttribution(html.toString()));
+for(const [file,html] of frozen) await writeFile(path.join('public',file),removeChatWidget(globalAttribution(html.toString())));
 // Preserve root asset paths for old mirrored HTML and /assets paths for new pages.
 await cp('assets','public/assets',{recursive:true});
 for(const file of ['logo.png','brand.css','brand.js']) await copyFile(path.join('assets',file),path.join('public',file));
