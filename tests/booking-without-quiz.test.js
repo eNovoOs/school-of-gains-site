@@ -23,7 +23,7 @@ test('negative appointment alone does not create a sales cycle',async()=>{
   assert.equal(queries.some(sql=>sql.startsWith('INSERT INTO sog_sales_cycles')),false);
  }
 });
-async function fixture({opportunities=[],reserve=true,contactOverride={},stage='booked',postError=false,knownDeal}={}){
+async function fixture({opportunities=[],reserve=true,contactOverride={},stage='booked',postError=false,knownDeal,meta}={}){
  const env={...process.env},fetch=global.fetch,calls=[],writes=[],cycle={id:randomUUID(),contact_id:randomUUID(),status:'open',stage};
  Object.assign(process.env,{GHL_SYNC_ENABLED:'true',GHL_PRIVATE_INTEGRATION_TOKEN:'test',GHL_STAGE_IDS_JSON:JSON.stringify(stages),GHL_ATTRIBUTION_FIELDS_JSON:JSON.stringify(Object.fromEntries(ATTR_FIELDS.map(key=>[key,key])))});
  global.fetch=async(url,options)=>{
@@ -32,7 +32,7 @@ async function fixture({opportunities=[],reserve=true,contactOverride={},stage='
   const searchedDeal=opportunities.find(o=>path==='/opportunities/'+o.id);
   if(searchedDeal && !knownDeal)return {ok:true,json:async()=>({opportunity:searchedDeal})};
   if(knownDeal && path==='/opportunities/'+knownDeal.id)return {ok:true,json:async()=>({opportunity:knownDeal})};
-  if(path==='/opportunities/search')return {ok:true,json:async()=>({opportunities})};
+  if(path==='/opportunities/search')return {ok:true,json:async()=>({opportunities,meta})};
   if(options.method==='POST') {if(postError)throw new Error('timeout');return {ok:true,json:async()=>({opportunity:{id:'new-deal',locationId:LOCATION,contactId:'contact',pipelineId:CLOSERS,pipelineStageId:data.pipelineStageId,status:'open',assignedTo:data.assignedTo}})};}
   return {ok:true,json:async()=>({})};
  };
@@ -80,5 +80,15 @@ test('wrong setter stage waits; exact read overrides stale search handoff stage'
  const setter={id:'setter-deal',contactId:'contact',pipelineId:'PSq0fv77HbtMg9bdKC2p',pipelineStageId:'2f75b70e-62fd-4b31-a72f-381f2a505165',status:'open',assignedTo:'setter-person'};
  for(const options of [{opportunities:[{...setter,pipelineStageId:'original'}]},{opportunities:[setter],knownDeal:{...setter,pipelineStageId:'original'}}]){
   await assert.rejects(fixture(options),error=>{assert.equal(error.message,'ghl_manual_setter_transfer_pending');assert.equal(error.calls.some(call=>['POST','PUT','ALLOCATE'].includes(call.method)),false);return true;});
+ }
+});
+
+test('GHL terminal search cursor URL does not block a complete handoff result',async()=>{
+ const setter={id:'setter-deal',contactId:'contact',pipelineId:'PSq0fv77HbtMg9bdKC2p',pipelineStageId:'2f75b70e-62fd-4b31-a72f-381f2a505165',status:'open'};
+ const meta={total:1,currentPage:1,nextPage:'',nextPageUrl:'https://services.leadconnectorhq.com/opportunities/search?startAfterId=setter-deal'};
+ const result=await fixture({opportunities:[setter],meta});
+ assert.equal(result.calls.find(x=>x.method==='POST').data.pipelineStageId,'setter');
+ for(const incomplete of [{...meta,total:2},{...meta,total:undefined},{...meta,nextPage:2}]){
+  await assert.rejects(fixture({opportunities:[setter],meta:incomplete}),e=>{assert.equal(e.message,'ghl_opportunity_review_required');assert.equal(e.calls.some(x=>x.method==='POST'),false);return true;});
  }
 });

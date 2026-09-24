@@ -11,7 +11,7 @@ module.exports = async (req,res) => {
     const payload=body(req);
     if(payload.type==='opportunity_updated') return res.status(200).json({ok:true,...await saveOpportunity(opportunity(payload))});
     const input = appointment(payload);
-    const allowed = (process.env.GHL_CALENDAR_IDS || '').split(',').filter(Boolean);
+    const allowed = (process.env.GHL_CALENDAR_IDS || '').split(',').map(value=>value.trim()).filter(Boolean);
     if(!allowed.includes(input.calendarId)) throw new InputError('calendar_not_allowed',403);
     return res.status(200).json({ok:true,...await saveAppointment(input)});
   } catch(error) { return fail(res,error); }
