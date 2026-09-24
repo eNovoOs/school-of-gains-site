@@ -23,13 +23,13 @@ test('later sales progress and terminal columns resist appointment regressions',
 async function runSync({stage='booked',remote='unbooked',appointment={attribution:{latestTouch:{medium:'cpc'}}},mapping=stages,remoteStatus='open'}) {
  const priorFetch=global.fetch,priorEnv={...process.env},requests=[],queries=[];
  Object.assign(process.env,{GHL_SYNC_ENABLED:'true',GHL_PRIVATE_INTEGRATION_TOKEN:'test',GHL_STAGE_IDS_JSON:JSON.stringify(mapping)});
- global.fetch=async(url,options)=>{requests.push({url,method:options.method,body:options.body&&JSON.parse(options.body)});return {ok:true,json:async()=>({opportunity:{id:'opp',pipelineId:'GxJOcIsgv7Svx90E2BZr',status:remoteStatus,pipelineStageId:remote}})};};
- const c={query:async(sql,params)=>{queries.push({sql,params});return {rows:sql.startsWith('SELECT * FROM sog_sales_cycles')?[{id:'cycle',status:'open',stage,ghl_opportunity_id:'opp',booking_setter_id:'stale-cycle-setter'}]:appointment?[appointment]:[]};}};
+ global.fetch=async(url,options)=>{requests.push({url,method:options.method,body:options.body&&JSON.parse(options.body)});return {ok:true,json:async()=>({opportunities:[],opportunity:{id:'opp',pipelineId:'GxJOcIsgv7Svx90E2BZr',status:remoteStatus,pipelineStageId:remote}})};};
+ const c={query:async(sql,params)=>{queries.push({sql,params});return {rows:sql.startsWith('SELECT * FROM sog_contacts')?[{id:'contact',ghl_contact_id:'ghl-contact'}]:sql.startsWith('SELECT ghl_opportunity_id')?[]:sql.startsWith('SELECT * FROM sog_sales_cycles')?[{id:'cycle',status:'open',stage,ghl_opportunity_id:'opp',booking_setter_id:'stale-cycle-setter'}]:appointment?[appointment]:[]};}};
  try{await syncAppointment(c,{cycleId:'cycle',appointmentId:'stale-job-appointment'});return {requests,queries};}
  finally{global.fetch=priorFetch;for(const key of Object.keys(process.env))if(!(key in priorEnv))delete process.env[key];Object.assign(process.env,priorEnv);}
 }
 test('appointment sync routes paid active snapshot to ads and does not reuse stale cycle setter',async()=>{
- const result=await runSync({});assert.equal(result.requests[1].body.pipelineStageId,'ads');
+ const result=await runSync({});assert.equal(result.requests.find(r=>r.method==='PUT').body.pipelineStageId,'ads');
  assert.match(result.queries[1].sql,/status IN \('new','confirmed'\)/);assert.deepEqual(result.queries[1].params,['cycle']);
 });
 test('verified setter sync routes setter column; reschedule preserves existing closer column',async()=>{

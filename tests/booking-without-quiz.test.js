@@ -29,6 +29,8 @@ async function fixture({opportunities=[],reserve=true,contactOverride={},stage='
  global.fetch=async(url,options)=>{
   const path=new URL(url).pathname;const data=options.body&&JSON.parse(options.body);calls.push({path,method:options.method,data});
   if(path==='/contacts/contact')return {ok:true,json:async()=>({contact:{id:'contact',locationId:LOCATION,email:'booking@example.invalid',...contactOverride}})};
+  const searchedDeal=opportunities.find(o=>path==='/opportunities/'+o.id);
+  if(searchedDeal && !knownDeal)return {ok:true,json:async()=>({opportunity:searchedDeal})};
   if(knownDeal && path==='/opportunities/'+knownDeal.id)return {ok:true,json:async()=>({opportunity:knownDeal})};
   if(path==='/opportunities/search')return {ok:true,json:async()=>({opportunities})};
   if(options.method==='POST') {if(postError)throw new Error('timeout');return {ok:true,json:async()=>({opportunity:{id:'new-deal',locationId:LOCATION,contactId:'contact',pipelineId:CLOSERS,pipelineStageId:data.pipelineStageId,status:'open',assignedTo:data.assignedTo}})};}
@@ -61,23 +63,22 @@ test('independent durable creation fence authorizes exactly one POST attempt and
  assert.equal(await creation.reserve(id,'contact',run),true);assert.equal(await creation.reserve(id,'contact',run),false);await assert.rejects(creation.reserve(id,'other',run),{message:'ghl_opportunity_creation_identity_invalid'});
 });
 
-test('booking waits for manual setter transfer then adopts the same moved deal with owner and BOF preserved',async()=>{
- const setter={id:'manual-deal',contactId:'contact',pipelineId:'PSq0fv77HbtMg9bdKC2p',pipelineStageId:'setter-original-stage',status:'open',assignedTo:'sales-owner'};
- await assert.rejects(fixture({opportunities:[setter]}),error=>{
-  assert.equal(error.message,'ghl_manual_setter_transfer_pending');
-  assert.equal(error.calls.some(call=>['POST','PUT','ALLOCATE'].includes(call.method)),false);return true;
- });
- const moved={...setter,pipelineId:CLOSERS,pipelineStageId:'setter'};
- const result=await fixture({opportunities:[moved]});
- assert.equal(result.cycle.ghl_opportunity_id,setter.id);
- assert.equal(result.writes.find(write=>write.sql.includes('assigned_closer_id')).params[2],'sales-owner');
- assert.equal(result.calls.some(call=>['POST','PUT','ALLOCATE'].includes(call.method)),false);
+
+test('setter handoff column plus real booking creates separate closer deal and leaves setter untouched',async()=>{
+ const setter={id:'setter-deal',contactId:'contact',pipelineId:'PSq0fv77HbtMg9bdKC2p',pipelineStageId:'2f75b70e-62fd-4b31-a72f-381f2a505165',status:'open',assignedTo:'setter-person'};
+ await assert.rejects(fixture({opportunities:[setter],stage:'unbooked'}),{message:'ghl_active_booking_missing'});
+ const result=await fixture({opportunities:[setter]});
+ const post=result.calls.find(call=>call.method==='POST');assert.equal(post.data.pipelineStageId,'setter');assert.equal(post.data.assignedTo,'reserved-closer');
+ assert.equal(result.calls.some(call=>call.path==='/opportunities/setter-deal'&&call.method!=='GET'),false);
+ assert.equal(result.writes.some(write=>write.sql.includes('booking_setter_id=')),false);
+ await assert.rejects(fixture({opportunities:[setter],reserve:false}),error=>{assert.equal(error.message,'ghl_opportunity_creation_uncertain_review_required');assert.equal(error.calls.some(call=>call.method==='POST'),false);return true;});
+ const existing={id:'closer-deal',contactId:'contact',pipelineId:CLOSERS,pipelineStageId:'setter',status:'open',assignedTo:'retained-owner'};
+ const retry=await fixture({opportunities:[setter,existing]});assert.equal(retry.cycle.ghl_opportunity_id,'closer-deal');assert.equal(retry.calls.some(call=>call.method==='POST'),false);
+ assert.equal(retry.writes.find(write=>write.sql.includes('assigned_closer_id')).params[2],'retained-owner');
 });
-test('known setter deal exact read blocks duplicate creation during search lag and adopts completed manual move',async()=>{
- const setter={id:'known-deal',contactId:'contact',pipelineId:'PSq0fv77HbtMg9bdKC2p',pipelineStageId:'original',status:'open',assignedTo:'retained'};
- await assert.rejects(fixture({knownDeal:setter}),error=>{
-  assert.equal(error.message,'ghl_manual_setter_transfer_pending');assert.equal(error.calls.some(call=>call.method==='POST'),false);return true;
- });
- const result=await fixture({knownDeal:{...setter,pipelineId:CLOSERS,pipelineStageId:'setter'}});
- assert.equal(result.cycle.ghl_opportunity_id,'known-deal');assert.equal(result.calls.some(call=>['POST','PUT','ALLOCATE'].includes(call.method)),false);
+test('wrong setter stage waits; exact read overrides stale search handoff stage',async()=>{
+ const setter={id:'setter-deal',contactId:'contact',pipelineId:'PSq0fv77HbtMg9bdKC2p',pipelineStageId:'2f75b70e-62fd-4b31-a72f-381f2a505165',status:'open',assignedTo:'setter-person'};
+ for(const options of [{opportunities:[{...setter,pipelineStageId:'original'}]},{opportunities:[setter],knownDeal:{...setter,pipelineStageId:'original'}}]){
+  await assert.rejects(fixture(options),error=>{assert.equal(error.message,'ghl_manual_setter_transfer_pending');assert.equal(error.calls.some(call=>['POST','PUT','ALLOCATE'].includes(call.method)),false);return true;});
+ }
 });

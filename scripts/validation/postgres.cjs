@@ -50,6 +50,7 @@ async function run(argv=process.argv.slice(2),env=process.env) {
       for(const name of await require('./booking-cycle-fixture.cjs')(db))check(name);
       await require('./lead-routing-fixture.cjs')(db);
       check('lead intake concurrency, canonical contact reuse and task episode lifecycle');
+      for(const name of await require('./setter-handoff-fixture.cjs')(db))check(name);
       return;
     }
     if(argv.includes('--recovery-only')) {

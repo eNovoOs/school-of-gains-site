@@ -62,3 +62,68 @@ test('expired signal claimant cannot report delivery after another worker takes 
  assert.equal(result.processed,0);assert.equal(result.lostLease,true);
  assert.ok(base.writes.at(-1).sql.includes('claim_token=$3'));
 });
+
+const SETTERS='PSq0fv77HbtMg9bdKC2p',SETTER_BOOKED='2f75b70e-62fd-4b31-a72f-381f2a505165';
+const setterOpportunity={id:'setter-deal',contactId:'contact1',locationId:LOCATION,pipelineId:SETTERS,pipelineStageId:SETTER_BOOKED,status:'open',updatedAt:'2026-01-01T10:00:00Z'};
+const setterContact={id:'contact1',locationId:LOCATION,email:'media@revupcmo.com'};
+const pilotEnv={ATTRIBUTION_PILOT_EMAILS:'media@revupcmo.com'};
+const setterJob={id:'receipt-setter',claimToken:'claim'};
+function setterStorage({linked=true,booked=true,lease=true}={}){
+ const calls=[];
+ const db={transaction:fn=>fn(db),query:async(sql,args)=>{
+  calls.push({sql,args});
+  if(sql.startsWith('SELECT id FROM sog_provider_signals'))return {rows:lease?[{id:setterJob.id}]:[]};
+  if(sql.startsWith('SELECT id,email'))return {rows:linked?[{id:'local-contact',email:setterContact.email}]:[]};
+  if(sql.startsWith('SELECT sc.id'))return {rows:booked?[{id:'local-cycle'}]:[]};
+  if(sql.startsWith('UPDATE sog_outbox'))return {rowCount:1};
+  throw new Error('Unexpected SQL');
+ }};
+ return {db,calls};
+}
+test('setter opportunity readback validates exact pipeline/contact and retains stable authoritative identity',async()=>{
+ const request={kind:'opportunity',resourceId:setterOpportunity.id,contactId:'contact1'};
+ const first=await normalize(request,async()=>({opportunity:setterOpportunity}));
+ assert.equal(first.pipelineId,SETTERS);assert.equal(first.contactId,'contact1');
+ assert.equal(first.eventId,(await normalize(request,async()=>({opportunity:setterOpportunity}))).eventId);
+ for(const change of [{pipelineId:'foreign'},{contactId:'other'},{contactId:undefined},{locationId:'other'}])await assert.rejects(normalize(request,async()=>({opportunity:{...setterOpportunity,...change}})),/provider_identity_mismatch/);
+});
+test('verified setter handoff only wakes precise blocked appointment deliveries with real active booking',async()=>{
+ const {reconcileSetterHandoff}=require('../lib/ghl-signal');const s=setterStorage();
+ const result=await reconcileSetterHandoff({...setterOpportunity,opportunityId:setterOpportunity.id},setterJob,s.db,async path=>{assert.equal(path,'/contacts/contact1');return {contact:setterContact};},pilotEnv);
+ assert.equal(result.requeued,1);
+ const update=s.calls.find(c=>c.sql.startsWith('UPDATE'));
+ assert.match(update.sql,/o.type='appointment'/);assert.match(update.sql,/o.status IN \('pending','failed'\)/);
+ assert.match(update.sql,/o.last_error='ghl_manual_setter_transfer_pending'/);
+ assert.match(update.sql,/a.id=o.payload->>'appointmentId'/);assert.match(update.sql,/a.status IN \('new','confirmed'\)/);
+ assert.equal(s.calls.some(c=>/INSERT|DELETE/.test(c.sql)),false);
+});
+test('handoff ordering retries missing contact/booking without inventing either',async()=>{
+ const {reconcileSetterHandoff}=require('../lib/ghl-signal');
+ for(const [options,message]of [[{linked:false},'setter_contact_not_linked_retry'],[{booked:false},'setter_booking_not_linked_retry'],[{lease:false},'signal_lease_lost']]){
+  const s=setterStorage(options);
+  await assert.rejects(reconcileSetterHandoff(setterOpportunity,setterJob,s.db,async()=>({contact:setterContact}),pilotEnv),new RegExp(message));
+  assert.equal(s.calls.some(c=>c.sql.startsWith('UPDATE')),false);
+ }
+});
+test('other setter stages are consumed without routing and pilot guard runs before mutation',async()=>{
+ const {reconcileSetterHandoff}=require('../lib/ghl-signal');const s=setterStorage();
+ assert.deepEqual(await reconcileSetterHandoff({...setterOpportunity,pipelineStageId:'other'},setterJob,s.db,async()=>({contact:setterContact}),pilotEnv),{ignored:true});
+ assert.equal(s.calls.length,0);
+ await assert.rejects(reconcileSetterHandoff(setterOpportunity,setterJob,s.db,async()=>({contact:{...setterContact,email:'other@example.invalid'}}),pilotEnv),/intake_unavailable/);
+ assert.equal(s.calls.length,0);
+});
+
+test('setter inbox dispatch wakes routing without invoking closer opportunity persistence',async()=>{
+ const s=setterStorage();const localQuery=s.db.query;let token;
+ s.db.query=async(sql,args)=>{
+  if(sql.startsWith('SELECT * FROM sog_provider_signals'))return {rows:[{id:setterJob.id,kind:'opportunity',resource_id:setterOpportunity.id,contact_id:'contact1',attempts:0}]};
+  if(sql.startsWith('UPDATE sog_provider_signals SET claim_token')){token=args[1];return {rowCount:1};}
+  if(sql.includes("SET status='delivered'")){assert.equal(args[2],token);assert.match(sql,/lease_until>clock_timestamp/);return {rowCount:1};}
+  return localQuery(sql,args);
+ };
+ s.db.saveOpportunity=async()=>{throw new Error('Setter signal must not save closer cycle');};
+ s.db.saveAppointment=async()=>{throw new Error('Stage change must not create appointment');};
+ const result=await processOne({db:s.db,env:pilotEnv,read:async path=>path.startsWith('/opportunities/')?{opportunity:setterOpportunity}:{contact:setterContact}});
+ assert.equal(result.processed,1);
+ assert.equal(s.calls.filter(c=>c.sql.startsWith('UPDATE sog_outbox')).length,1);
+});
