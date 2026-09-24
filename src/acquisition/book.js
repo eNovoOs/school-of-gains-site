@@ -153,7 +153,7 @@ async function check() {
         heading.textContent = 'This link is no longer available.';
         status.textContent = 'We could not verify this application link.';
         detailHeading.textContent = 'Your link may have expired.';
-        detail.textContent = 'If you just submitted an application, return to that form and retry to retrieve your booking link. An expired link does not mean your application was deleted.';
+        detail.textContent = 'An expired link does not delete your application. Ask the School of Gains sales team for a fresh booking link; you do not need to submit your application again.';
       } else throw new Error('unavailable');
     } else {
       heading.textContent = 'Application received.';

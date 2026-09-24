@@ -110,3 +110,11 @@ td:nth-last-child(-n+2), th:nth-last-child(-n+2) { text-align: right; }
   .outcomes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+
+h3 { font-family: 'Sora', sans-serif; font-size: 15px; margin: 28px 0 10px; }
+.funnel-table { min-width: 900px; }
+.funnel-table td { overflow-wrap: anywhere; }
+.funnel-table td:nth-child(n+4), .funnel-table th:nth-child(n+4) { text-align: right; }
+.report-tools { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 16px 0; }
+.report-tools a { color: var(--green-bright); text-underline-offset: 4px; }
+.report-tools a:focus-visible { outline: 3px solid var(--green-bright); outline-offset: 4px; }

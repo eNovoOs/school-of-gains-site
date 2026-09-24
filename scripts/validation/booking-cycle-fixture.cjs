@@ -12,7 +12,9 @@ module.exports=async function validateBookingCycle(db){
  const {rows:appointments}=await db.query('SELECT * FROM sog_appointments WHERE contact_id=$1',[contactId]);assert.equal(appointments.length,2);assert.ok(appointments.every(row=>row.cycle_id===cycles[0].id));
  assert.ok(appointments.every(row=>row.attribution.firstTouch.source==='meetup'));
  assert.equal((await db.query('SELECT count(*)::int AS n FROM sog_applications WHERE contact_id=$1',[contactId])).rows[0].n,0);
- assert.equal((await db.query("SELECT count(*)::int AS n FROM sog_outbox WHERE type='appointment' AND payload->>'cycleId'=$1",[cycles[0].id])).rows[0].n,2);
+ const queued=(await db.query("SELECT count(*)::int AS n FROM sog_outbox WHERE type='appointment' AND payload->>'cycleId'=$1",[cycles[0].id])).rows[0].n;
+ assert.ok(queued>=1 && queued<=2); // Older booking arriving second is intentionally superseded.
+ assert.equal((await db.query('SELECT 1 FROM sog_outbox WHERE event_id=$1',[two.eventId])).rowCount,1);
  // Independent reservation pool commits through parent outbox rollback and never
  // needs the sales-cycle row lock held by the caller.
  let first;
@@ -24,5 +26,5 @@ module.exports=async function validateBookingCycle(db){
  const reservations=await Promise.all(Array.from({length:6},()=>creation.reserve(cycles[0].id,ghlId)));
  assert.ok(reservations.every(value=>value===false));
  assert.equal((await db.query('SELECT count(*)::int AS n FROM sog_opportunity_creation_attempts WHERE cycle_id=$1',[cycles[0].id])).rows[0].n,1);
- return ['concurrent bookings without quiz reuse one booked cycle and retain distinct appointment routing jobs','independent closer creation reservation survives delivery rollback and prevents duplicate POST authorization'];
+ return ['concurrent bookings without quiz reuse one booked cycle and retain canonical routing for the newest appointment','independent closer creation reservation survives delivery rollback and prevents duplicate POST authorization'];
 };

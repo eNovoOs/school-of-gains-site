@@ -1,0 +1,5 @@
+#credit-form { max-width: 680px; }
+#credit-form select, #credit-form textarea { width: 100%; }
+#credit-form textarea { display: block; font: inherit; color: var(--white); background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; resize: vertical; }
+#credit-form input[type="checkbox"] { width: 18px; min-height: 18px; height: 18px; padding: 0; margin: 0 8px 0 0; vertical-align: middle; accent-color: var(--green); }
+#credit-form textarea:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }

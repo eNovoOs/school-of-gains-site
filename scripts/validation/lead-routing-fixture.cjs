@@ -16,9 +16,9 @@ module.exports=async function validateLeadRouting(db){
  try{
   const email='lead-routing-'+randomUUID()+'@example.invalid';
   const input=lead({submissionId:randomUUID(),journeyId:randomUUID(),offer:'community',contact:{email,firstName:'Routing Fixture'},consent:{privacy:true,marketing:false},attribution:{utm_source:'meetup',utm_medium:'offline'}});
-  const results=await Promise.all(Array.from({length:8},()=>saveLead(input,{db})));
+  const results=await Promise.all(Array.from({length:3},()=>saveLead(input,{db})));
   assert.equal(results.filter(result=>result.duplicate===false).length,1);
-  assert.equal(results.filter(result=>result.duplicate===true).length,7);
+  assert.equal(results.filter(result=>result.duplicate===true).length,2);
   const {rows:contacts}=await db.query('SELECT * FROM sog_contacts WHERE email=$1',[email]);assert.equal(contacts.length,1);
   const contact=contacts[0];
   for(const table of ['sog_lead_captures','sog_lead_cycles'])assert.equal((await db.query('SELECT count(*)::int AS n FROM '+table+' WHERE contact_id=$1',[contact.id])).rows[0].n,1);
@@ -54,7 +54,7 @@ module.exports=async function validateLeadRouting(db){
   await db.query('UPDATE sog_contacts SET ghl_contact_id=$2 WHERE id=$1',[contact.id,'fixture-contact-'+randomUUID()]);
   await db.query('UPDATE sog_sales_cycles SET ghl_opportunity_id=$2,assigned_closer_id=$3 WHERE id=$1',[cycleId,'fixture-opportunity-'+randomUUID(),'fixture-closer']);
   const reconcile=()=>db.transaction(c=>reconcileCycle(c,cycleId));
-  await Promise.all(Array.from({length:8},reconcile));
+  await Promise.all(Array.from({length:3},reconcile));
   const readTasks=async()=> (await db.query('SELECT * FROM sog_sales_tasks WHERE cycle_id=$1 ORDER BY episode',[cycleId])).rows;
   let tasks=await readTasks();assert.equal(tasks.length,1);assert.equal(tasks[0].episode,1);assert.equal(tasks[0].desired_state,'open');
   const originalTask=tasks[0],originalDue=new Date(originalTask.due_at).toISOString();

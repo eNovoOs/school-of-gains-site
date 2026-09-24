@@ -38,15 +38,18 @@ async function run(argv=process.argv.slice(2),env=process.env) {
     allocation=require('../../lib/attribution-assignment');
     assert.equal((await db.query('SELECT current_schema() AS name')).rows[0].name,config.schema,'Runtime pool is not isolated');
     migrationConnection=await db.getPool().connect();
-    for(let pass=0;pass<2;pass++)for(const file of ['001-attribution.sql','002-booking.sql','003-closer-rotation.sql','004-provider-signals.sql','005-booking-recovery.sql','006-lead-intake.sql','007-sales-tasks.sql','008-opportunity-creation.sql']) {
+    for(let pass=0;pass<2;pass++)for(const file of ['001-attribution.sql','002-booking.sql','003-closer-rotation.sql','004-provider-signals.sql','005-booking-recovery.sql','006-lead-intake.sql','007-sales-tasks.sql','008-opportunity-creation.sql','009-setter-credit.sql']) {
       assert.equal((await migrationConnection.query('SELECT current_schema() AS name')).rows[0].name,config.schema);
       await migrationConnection.query(await fs.readFile(path.join(__dirname,'../../db',file),'utf8'));
     }
     migrationConnection.release();migrationConnection=null;
     const {rows:tables}=await db.query('SELECT table_name FROM information_schema.tables WHERE table_schema=$1',[config.schema]);
-    assert.equal(tables.length,18);
-    check('migrations 001–008 apply and reapply inside disposable schema');
+    assert.equal(tables.length,19);
+    check('migrations 001–009 apply and reapply inside disposable schema');
     if(argv.includes('--routing-only')) {
+      await require('./dashboard-cohort-fixture.cjs')(db);
+      check('dashboard acquisition cohorts and mixed-source booking outcomes persist correctly');
+      for(const name of await require('./reissue-credit-fixture.cjs')(db))check(name);
       for(const name of await require('./booking-cycle-fixture.cjs')(db))check(name);
       await require('./lead-routing-fixture.cjs')(db);
       check('lead intake concurrency, canonical contact reuse and task episode lifecycle');

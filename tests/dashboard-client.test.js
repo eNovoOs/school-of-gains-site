@@ -96,3 +96,29 @@ test('lead routing reviews remain visible despite successful delivery and distin
  b.setData(baseline());await b.refresh();assert.equal(health('Lead routing review reporting'),'Unavailable');
  b.setData(report(2));await b.refresh();await b.logout();assert.equal(b.get('health').children.length,0);
 });
+
+test('cohort funnel renders person counts and rates while setter evidence stays explicit',async()=>{
+ const f={summary:{leads:4,qualified:3,booked:2,won:1,totalWon:2,wonWithoutVerifiedBooking:1},coverage:{leadCaptureIncluded:true,leadCaptureEntry:2,quizEntry:1,directBookingEntry:1,qualifiedWithoutQuiz:1,unknownSource:0},channels:[{source:'meetup',medium:'offline',leads:4,qualified:3,booked:2,won:1,total_won:2}],campaigns:[]};
+ const b=await dashboard({...baseline(),funnel:f,setters:{bookings:2,unknownBookings:1,evidenceLedgerEnabled:true,rows:[{setter_id:'staff1',setter_name:'<script>bad</script>',evidence:'admin_attested',bookings:1,contacts:1,won_contacts:0},{setter_id:null,evidence:'unknown',bookings:1,contacts:1,won_contacts:1}]}});
+ assert.deepEqual(b.get('funnel-summary').children.map(x=>x.children[1].textContent),['4','3','2','1']);
+ assert.deepEqual(b.get('funnel-channels').children[0].children.map(x=>x.textContent),['meetup','offline','4','3','2','1','2','50.0%','25.0%']);
+ assert.match(b.get('funnel-coverage').textContent,/All won people: 2/);
+ assert.deepEqual(b.get('setter-credit').children.map(x=>x.children.slice(0,2).map(v=>v.textContent)),[['<script>bad</script>','Administrator attestation'],['Unknown','No credit recorded']]);
+ assert.equal(b.get('setter-credit').children[0].children[0].children.length,0);
+ await b.logout();for(const id of ['funnel-summary','funnel-channels','setter-credit'])assert.equal(b.get(id).children.length,0);
+});
+test('missing cohorts and setter reports are unavailable, partial acquisition coverage explicit',async()=>{
+ const b=await dashboard(baseline());assert.match(b.get('funnel-summary').children[0].textContent,/unavailable/);assert.match(b.get('setter-credit').children[0].children[0].textContent,/unavailable/);
+ b.setData({...baseline(),funnel:{summary:{leads:0,qualified:0,booked:0,won:0,totalWon:0,wonWithoutVerifiedBooking:0},coverage:{leadCaptureIncluded:false},channels:[],campaigns:[]}});await b.refresh();assert.match(b.get('funnel-coverage').textContent,/coverage is partial/);
+ b.setData(null);await b.refresh();assert.equal(b.get('funnel-summary').children.length,0);assert.equal(b.get('funnel-coverage').textContent,'');
+});
+
+test('a report finishing after sign-out cannot restore private metrics',async()=>{
+ const elements=new Map();const get=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};
+ let finishStats;
+ vm.runInNewContext(script,{document:{getElementById:get,createElement:tag=>new Element(tag)},fetch:async url=>url.includes('stats')?await new Promise(resolve=>{finishStats=()=>resolve({ok:true,json:async()=>baseline()});}):({ok:true,json:async()=>({})}),Date,Number,Error});
+ await flush();assert.equal(get('report').hidden,false);
+ await get('logout').listeners.click();await flush();assert.equal(get('report').hidden,true);
+ finishStats();await flush();
+ for(const id of ['metrics','channels','campaigns','funnel-summary','setter-credit'])assert.equal(get(id).children.length,0);
+});
